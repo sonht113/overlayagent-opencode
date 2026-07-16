@@ -303,10 +303,43 @@ export const STYLE_PRESETS: Record<AnimationStyle, StylePreset> = {
       { h: 200, s: 50, l: 56 },
     ],
   },
+  signal: {
+    id: "signal",
+    label: "Signal",
+    hint: "Concentric waves · ambient",
+    spawnMode: "signal",
+    speedMul: 0.68,
+    stretchMul: 0.7,
+    spawnMul: 0.78,
+    trailChance: 0.38,
+    lifeMin: 0.55,
+    lifeMax: 1.25,
+    radialBias: 0,
+    curveChance: 0.1,
+    burstCount: 36,
+    breathAmp: 0.16,
+    breathHz: 0.45,
+    defaultAngle: null,
+    defaultSpread: null,
+    hideMotion: true,
+    sizeGrow: false,
+    sizeMul: 0.95,
+    trailMaxPoints: 4,
+    glowDrawMul: 1.05,
+    softBloom: true,
+    palette: [
+      { h: 192, s: 100, l: 88 },
+      { h: 255, s: 95, l: 90 },
+      { h: 210, s: 90, l: 92 },
+      { h: 280, s: 85, l: 88 },
+      { h: 175, s: 95, l: 86 },
+    ],
+  },
 };
 
 export const STYLE_ORDER: AnimationStyle[] = [
   "tunnel",
+  "signal",
   "streaks",
   "aurora",
   "rain",
@@ -333,6 +366,7 @@ export function isAnimationStyle(v: unknown): v is AnimationStyle {
     v === "spark" ||
     v === "orbit" ||
     v === "vortex" ||
-    v === "datastream"
+    v === "datastream" ||
+    v === "signal"
   );
 }

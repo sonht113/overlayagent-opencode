@@ -10,6 +10,8 @@
   let system: ParticleSystem | null = null;
   let visualActive = $state(false);
   let prevTokens = 0;
+  /** Edge detect isGenerating so token/settings updates never re-burst */
+  let lastGenerating = false;
 
   function applyMotionSettings(sys: ParticleSystem) {
     sys.setStyle(generation.animationStyle);
@@ -19,6 +21,8 @@
     sys.setUserSpeed(generation.particleSpeed);
     sys.setMotionDirection(generation.motionAngle, generation.motionSpread);
     sys.setTokenCount(generation.tokenCount);
+    const sessions = Object.keys(generation.activeSessions).length;
+    sys.setSessionCount(Math.max(1, sessions || 1));
   }
 
   onMount(() => {
@@ -31,6 +35,7 @@
 
     if (generation.isGenerating) {
       visualActive = true;
+      lastGenerating = true;
       system.start();
     }
 
@@ -41,21 +46,22 @@
     };
   });
 
-  // Start / stop with soft fade
+  // Start / stop only on isGenerating edge — never re-burst on token/settings churn
   $effect(() => {
     const generating = generation.isGenerating;
     if (!system) return;
 
-    if (generating) {
+    if (generating && !lastGenerating) {
       visualActive = true;
       prevTokens = generation.tokenCount;
       applyMotionSettings(system);
       system.start();
-    } else {
+    } else if (!generating && lastGenerating) {
       system.stop(() => {
         visualActive = false;
       });
     }
+    lastGenerating = generating;
   });
 
   // Live token → intensity + floating chips on delta
@@ -110,6 +116,12 @@
   // Settings: token flow toggle
   $effect(() => {
     system?.setTokenFlow(generation.tokenFlow);
+  });
+
+  // Multi-session tint / density (OpenCode concurrent gens)
+  $effect(() => {
+    const n = Object.keys(generation.activeSessions).length;
+    system?.setSessionCount(Math.max(1, n || 1));
   });
 </script>
 

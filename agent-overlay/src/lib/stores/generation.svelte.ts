@@ -22,6 +22,25 @@ function defaultStyleAlphaMap(): Record<AnimationStyle, number> {
   return map;
 }
 
+/** Concurrent live OpenCode generations (multi-process / multi-repo). */
+export type ActiveSession = {
+  key: string;
+  session_id?: string | null;
+  bridge_pid?: number | string | null;
+  provider?: string | null;
+  model?: string | null;
+  tokens: number;
+  startedAt: number;
+  /** Last tokens_update / start touch — used for stale TTL sweep */
+  lastSeenAt: number;
+};
+
+/** Drop sessions with no activity for this long (missed generation_end). */
+const SESSION_STALE_MS = 90_000;
+const SWEEP_INTERVAL_MS = 15_000;
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const generation = $state({
   isGenerating: false,
   tokenCount: 0,
@@ -68,6 +87,11 @@ export const generation = $state({
   source: "manual" as "manual" | "opencode",
   liveSessionActive: false,
   /**
+   * Active OpenCode generations keyed by session/bridge identity.
+   * Overlay stays live while this is non-empty (any-active UX).
+   */
+  activeSessions: {} as Record<string, ActiveSession>,
+  /**
    * Hide window after live generation_end (product default: true for idle-hide UX).
    */
   autoHideOnEnd: true,
@@ -111,12 +135,17 @@ function readPersistable(): Persistable {
 }
 
 export function persistSettings() {
-  try {
-    if (typeof localStorage === "undefined") return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(readPersistable()));
-  } catch {
-    // ignore quota / private mode
-  }
+  // Debounce disk writes while dragging sliders
+  if (persistTimer != null) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    try {
+      if (typeof localStorage === "undefined") return;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(readPersistable()));
+    } catch {
+      // ignore quota / private mode
+    }
+  }, 200);
 }
 
 export function loadPersistedSettings() {
@@ -178,6 +207,221 @@ export function pushRecentEvent(event: string, detail?: string) {
   ].slice(-MAX_RECENT);
 }
 
+function activeSessionCount(): number {
+  return Object.keys(generation.activeSessions).length;
+}
+
+function ensureSessionSweep() {
+  if (typeof window === "undefined") return;
+  if (sweepTimer != null) return;
+  sweepTimer = setInterval(() => {
+    pruneStaleSessions();
+    if (activeSessionCount() === 0 && sweepTimer != null) {
+      clearInterval(sweepTimer);
+      sweepTimer = null;
+    }
+  }, SWEEP_INTERVAL_MS);
+}
+
+/** Remove sessions with no token/start activity past SESSION_STALE_MS. */
+export function pruneStaleSessions(now = Date.now()): string[] {
+  const dropped: string[] = [];
+  const next = { ...generation.activeSessions };
+  for (const [key, s] of Object.entries(next)) {
+    const seen = s.lastSeenAt || s.startedAt || 0;
+    if (now - seen > SESSION_STALE_MS) {
+      delete next[key];
+      dropped.push(key);
+    }
+  }
+  if (dropped.length) {
+    generation.activeSessions = next;
+    syncLiveFlagsFromSessions();
+    if (
+      activeSessionCount() === 0 &&
+      typeof window !== "undefined"
+    ) {
+      window.dispatchEvent(
+        new CustomEvent("agent-overlay:sessions-stale-cleared"),
+      );
+    }
+  }
+  return dropped;
+}
+
+function syncLiveFlagsFromSessions() {
+  const n = activeSessionCount();
+  const live = n > 0;
+  if (generation.liveSessionActive !== live) {
+    generation.liveSessionActive = live;
+  }
+  if (live) {
+    if (!generation.isGenerating) generation.isGenerating = true;
+    if (generation.source !== "opencode") generation.source = "opencode";
+    let sum = 0;
+    for (const s of Object.values(generation.activeSessions)) {
+      sum += s.tokens || 0;
+    }
+    if (generation.tokenCount !== sum) generation.tokenCount = sum;
+  } else if (generation.source === "opencode" && generation.isGenerating) {
+    generation.isGenerating = false;
+  }
+}
+
+/** Stable key for multi-process generation tracking. */
+export function sessionKeyFromEvent(data: {
+  session_id?: string | null;
+  bridge_pid?: number | string | null;
+}): string {
+  const sid = data.session_id != null && String(data.session_id).trim()
+    ? String(data.session_id).trim()
+    : "";
+  const pid =
+    data.bridge_pid != null && String(data.bridge_pid).trim()
+      ? String(data.bridge_pid).trim()
+      : "";
+  if (sid && pid) return `${pid}:${sid}`;
+  if (sid) return `sid:${sid}`;
+  if (pid) return `pid:${pid}`;
+  // No identity — single shared anon bucket (never Date.now() per event)
+  return "anon";
+}
+
+/**
+ * Resolve which activeSessions key an event refers to.
+ * Never steals another concurrent session via "only one left" heuristics.
+ */
+export function resolveActiveSessionKey(meta: {
+  session_id?: string | null;
+  bridge_pid?: number | string | null;
+  key?: string;
+}): string | null {
+  if (meta.key && generation.activeSessions[meta.key]) return meta.key;
+
+  const exact = sessionKeyFromEvent(meta);
+  if (generation.activeSessions[exact]) return exact;
+
+  const sid =
+    meta.session_id != null && String(meta.session_id).trim()
+      ? String(meta.session_id).trim()
+      : "";
+  const pid =
+    meta.bridge_pid != null && String(meta.bridge_pid).trim()
+      ? String(meta.bridge_pid).trim()
+      : "";
+  const entries = Object.entries(generation.activeSessions);
+
+  if (sid) {
+    const bySid = entries.filter(
+      ([, s]) => s.session_id != null && String(s.session_id) === sid,
+    );
+    if (bySid.length === 1) return bySid[0][0];
+    if (bySid.length > 1 && pid) {
+      const both = bySid.find(
+        ([, s]) => s.bridge_pid != null && String(s.bridge_pid) === pid,
+      );
+      if (both) return both[0];
+    }
+  }
+
+  if (pid) {
+    const byPid = entries.filter(
+      ([, s]) => s.bridge_pid != null && String(s.bridge_pid) === pid,
+    );
+    if (byPid.length === 1) return byPid[0][0];
+  }
+
+  return null;
+}
+
+/**
+ * Register a live OpenCode generation. Returns the session key.
+ * Overlay stays visible while any session is active.
+ */
+export function trackOpencodeStart(meta: {
+  session_id?: string | null;
+  bridge_pid?: number | string | null;
+  provider?: string | null;
+  model?: string | null;
+  key?: string;
+}): string {
+  const key = meta.key || sessionKeyFromEvent(meta);
+  const now = Date.now();
+  generation.activeSessions = {
+    ...generation.activeSessions,
+    [key]: {
+      key,
+      session_id: meta.session_id ?? null,
+      bridge_pid: meta.bridge_pid ?? null,
+      provider: meta.provider ?? null,
+      model: meta.model ?? null,
+      tokens: generation.activeSessions[key]?.tokens ?? 0,
+      startedAt: now,
+      lastSeenAt: now,
+    },
+  };
+  if (meta.provider != null) generation.lastProvider = String(meta.provider);
+  if (meta.model != null) generation.lastModel = String(meta.model);
+  if (meta.session_id != null) generation.lastSessionId = String(meta.session_id);
+  syncLiveFlagsFromSessions();
+  ensureSessionSweep();
+  return key;
+}
+
+/**
+ * End one live generation. Returns true if no OpenCode sessions remain
+ * (caller may hide overlay).
+ */
+export function trackOpencodeEnd(
+  meta: {
+    session_id?: string | null;
+    bridge_pid?: number | string | null;
+    key?: string;
+  },
+  finalTokens?: number,
+): boolean {
+  const key = resolveActiveSessionKey(meta);
+  if (key && generation.activeSessions[key]) {
+    const next = { ...generation.activeSessions };
+    delete next[key];
+    generation.activeSessions = next;
+  }
+
+  syncLiveFlagsFromSessions();
+  if (finalTokens != null && finalTokens > 0 && activeSessionCount() === 0) {
+    generation.tokenCount = finalTokens;
+  }
+  return activeSessionCount() === 0;
+}
+
+export function updateOpencodeTokens(
+  meta: {
+    session_id?: string | null;
+    bridge_pid?: number | string | null;
+    key?: string;
+  },
+  tokens: number,
+) {
+  const n = Math.max(0, Math.floor(Number.isFinite(tokens) ? tokens : 0));
+  const key = resolveActiveSessionKey(meta) || sessionKeyFromEvent(meta);
+  const cur = generation.activeSessions[key];
+  if (cur) {
+    if (cur.tokens === n) {
+      // Still refresh liveness without cloning the map when tokens unchanged
+      cur.lastSeenAt = Date.now();
+      return;
+    }
+    generation.activeSessions = {
+      ...generation.activeSessions,
+      [key]: { ...cur, tokens: n, lastSeenAt: Date.now() },
+    };
+    syncLiveFlagsFromSessions();
+  } else if (activeSessionCount() === 0) {
+    // No tracked session (orphan update) — only drive display when idle map empty
+    if (generation.tokenCount !== n) generation.tokenCount = n;
+  }
+}
+
 export function startGeneration(source: "manual" | "opencode" = "manual") {
   generation.isGenerating = true;
   generation.source = source;
@@ -187,15 +431,28 @@ export function startGeneration(source: "manual" | "opencode" = "manual") {
 }
 
 export function stopGeneration(source: "manual" | "opencode" = "manual") {
-  generation.isGenerating = false;
-  generation.source = source;
   if (source === "manual") {
+    // Explicit force-idle (tray Hide / Test Warp off) — clear everything
+    generation.activeSessions = {};
+    generation.isGenerating = false;
     generation.liveSessionActive = false;
+    generation.source = "manual";
+    return;
+  }
+  // opencode path should use trackOpencodeEnd; hard-stop only if nothing left
+  if (activeSessionCount() === 0) {
+    generation.isGenerating = false;
+    generation.liveSessionActive = false;
+    generation.source = source;
   }
 }
 
 export function clearLiveSession() {
+  generation.activeSessions = {};
   generation.liveSessionActive = false;
+  if (generation.source === "opencode") {
+    generation.isGenerating = false;
+  }
 }
 
 export function toggleGeneration() {

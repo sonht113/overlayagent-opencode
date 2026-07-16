@@ -2,7 +2,7 @@
 Read live token usage from OpenCode's SQLite DB.
 
 OpenCode INFO logs no longer emit incremental tokens.* during stream.
-Session/message tables in ~/.local/share/opencode/opencode.db do.
+Session/message tables under the OpenCode data dir (see opencode_data_dir) do.
 """
 
 from __future__ import annotations
@@ -15,12 +15,47 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from .config import opencode_data_dir
+
 
 def default_db_path() -> Path:
     env = os.environ.get("OPENCODE_DB", "").strip()
     if env:
         return Path(env).expanduser()
-    return Path.home() / ".local" / "share" / "opencode" / "opencode.db"
+    return opencode_data_dir() / "opencode.db"
+
+
+_conn_lock = threading.Lock()
+_ro_conn: sqlite3.Connection | None = None
+_ro_path: str | None = None
+
+
+def _get_ro_connection(db: Path) -> sqlite3.Connection | None:
+    """Reuse a single read-only connection per process when path is stable."""
+    global _ro_conn, _ro_path
+    if not db.exists():
+        return None
+    key = str(db)
+    with _conn_lock:
+        if _ro_conn is not None and _ro_path == key:
+            return _ro_conn
+        if _ro_conn is not None:
+            try:
+                _ro_conn.close()
+            except Exception:
+                pass
+            _ro_conn = None
+            _ro_path = None
+        try:
+            con = sqlite3.connect(
+                f"file:{db.as_posix()}?mode=ro", uri=True, timeout=1.0
+            )
+            con.execute("PRAGMA query_only=ON")
+            _ro_conn = con
+            _ro_path = key
+            return con
+        except Exception:
+            return None
 
 
 @dataclass
@@ -57,23 +92,11 @@ class TokenSnap:
 
 
 def _connect(db: Path) -> sqlite3.Connection | None:
-    if not db.exists():
-        return None
-    try:
-        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True, timeout=1.0)
-        con.execute("PRAGMA query_only=ON")
-        return con
-    except Exception:
-        return None
+    """Prefer shared RO connection; callers must not close it."""
+    return _get_ro_connection(db)
 
 
-def read_session_totals(session_id: str | None, db: Path | None = None) -> TokenSnap | None:
-    if not session_id:
-        return None
-    path = db or default_db_path()
-    con = _connect(path)
-    if not con:
-        return None
+def _session_totals_on(con: sqlite3.Connection, session_id: str) -> TokenSnap | None:
     try:
         row = con.execute(
             """
@@ -95,8 +118,16 @@ def read_session_totals(session_id: str | None, db: Path | None = None) -> Token
         )
     except Exception:
         return None
-    finally:
-        con.close()
+
+
+def read_session_totals(session_id: str | None, db: Path | None = None) -> TokenSnap | None:
+    if not session_id:
+        return None
+    path = db or default_db_path()
+    con = _connect(path)
+    if not con:
+        return None
+    return _session_totals_on(con, session_id)
 
 
 def _part_stream_chars(con: sqlite3.Connection, message_id: str) -> tuple[int, int]:
@@ -177,7 +208,7 @@ def read_live_tokens(
         est_out = max(0, text_c // 4)
         est_reason = max(0, reason_c // 4)
 
-        session = read_session_totals(session_id, path)
+        session = _session_totals_on(con, session_id)
         delta = TokenSnap(source="session_delta")
         if session and baseline:
             delta = TokenSnap(
@@ -194,9 +225,7 @@ def read_live_tokens(
         reasoning = max(msg_snap.reasoning, est_reason, delta.reasoning)
         inp = max(msg_snap.input, delta.input)
 
-        # If everything still zero, return None so we don't spam empty updates
         if out == 0 and reasoning == 0 and inp == 0:
-            # still emit tiny stream estimate if any chars
             if text_c or reason_c:
                 return TokenSnap(
                     output=max(1, est_out),
@@ -223,8 +252,6 @@ def read_live_tokens(
         )
     except Exception:
         return None
-    finally:
-        con.close()
 
 
 class SessionTokenPoller:

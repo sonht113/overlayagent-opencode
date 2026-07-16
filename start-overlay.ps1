@@ -9,12 +9,21 @@
 #>
 
 param(
-  [string]$OverlayDir = "C:\Work\Tool\agent-overlay",
+  [string]$OverlayDir = "",
   [string]$HealthUrl = "http://127.0.0.1:9876/health",
   [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $OverlayDir) {
+  $scriptRoot = if ($env:AGENT_TOOL_ROOT) {
+    $env:AGENT_TOOL_ROOT
+  } else {
+    Split-Path -Parent $MyInvocation.MyCommand.Path
+  }
+  $OverlayDir = Join-Path $scriptRoot "agent-overlay"
+}
 
 function Test-OverlayHealth {
   param([string]$Url)

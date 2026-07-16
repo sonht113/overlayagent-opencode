@@ -18,14 +18,17 @@ export function clamp(n: number, min: number, max: number): number {
 export function intensityFromTokens(
   tokens: number,
   ref: number = WARP.tokenRef,
+  opts?: { idleFloor?: number; activeFloor?: number },
 ): number {
+  const idleFloor = opts?.idleFloor ?? WARP.intensityFloorIdle;
+  const activeFloor = opts?.activeFloor ?? WARP.intensityFloor;
   const t = Math.max(0, tokens);
-  if (t <= 0) return WARP.intensityFloor;
+  if (t <= 0) return idleFloor;
 
   const n = Math.log1p(t) / Math.log1p(ref);
   // Blend floor → mapped value so low counts still feel a bit alive
-  const mapped = WARP.intensityFloor + (1 - WARP.intensityFloor) * n;
-  return clamp(mapped, WARP.intensityFloor, WARP.intensityMax);
+  const mapped = activeFloor + (1 - activeFloor) * n;
+  return clamp(mapped, activeFloor, WARP.intensityMax);
 }
 
 /** Linear interpolate */

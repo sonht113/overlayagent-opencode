@@ -8,11 +8,24 @@ import {
 import { getStylePreset } from "./presets";
 import type {
   AnimationStyle,
+  GenPhase,
   Particle,
   ParticleSystemOptions,
   StylePreset,
   WarpLayer,
 } from "./types";
+
+type SignalRing = {
+  r: number;
+  maxR: number;
+  life: number;
+  maxLife: number;
+  width: number;
+  hue: number;
+  sat: number;
+  light: number;
+  alpha: number;
+};
 
 /**
  * High-performance warp-speed Canvas field for transparent overlays.
@@ -21,7 +34,7 @@ import type {
  *  - Long velocity-aligned streaks (stretch) sell "hyperspace"
  *  - Depth layers (far/mid/near) with different speeds
  *  - Token count drives density / speed / stretch / glow
- *  - Style presets: tunnel / classic / aurora / rain / embers / comet / spark / orbit / vortex / datastream
+ *  - Style presets + signal waves; reactive phases / multi-session
  *  - No full-frame alpha residual (breaks desktop transparency)
  */
 export class ParticleSystem {
@@ -57,6 +70,16 @@ export class ParticleSystem {
   private style: StylePreset = getStylePreset("tunnel");
   private layerCdf: number[];
 
+  /** Reactive generation lifecycle */
+  private phase: GenPhase = "idle";
+  private phaseAge = 0;
+  private heartbeat = 0;
+  private sessionCount = 1;
+  private rings: SignalRing[] = [];
+  private ringAcc = 0;
+  /** Cooldown before next heartbeat-driven ring (seconds remaining) */
+  private ringCooldown = 0;
+
   constructor(canvas: HTMLCanvasElement, opts: ParticleSystemOptions = {}) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d", { alpha: true });
@@ -84,17 +107,42 @@ export class ParticleSystem {
     this.fade = 1;
     this.fadingOut = false;
     this.onIdle = null;
+    this.phase = "starting";
+    this.phaseAge = 0;
+    this.heartbeat = 0;
+    this.ringAcc = 0;
+    this.ringCooldown = 0;
+    this.rings.length = 0;
     this.ensureLoop();
+    // Two-step kick: main burst + smaller follow-up feel via higher spawn rate
     this.burst(this.style.burstCount);
+    this.burst(Math.min(20, Math.floor(this.style.burstCount * 0.35)));
+    // Opening wave — Signal only (other styles stay pure particle field)
+    if (this.style.spawnMode === "signal") {
+      this.spawnRing(1.0);
+      this.spawnRing(0.55);
+    }
+    this.recomputeTarget();
   }
 
   stop(onDone?: () => void) {
     this.spawning = false;
     this.fadingOut = true;
+    this.phase = "ending";
+    this.phaseAge = 0;
     this.onIdle = onDone ?? null;
     this.targetIntensity = 0;
+    // Completion bloom before fade settles (short-lived rings)
+    if (this.style.spawnMode === "signal") {
+      this.spawnRing(1.05, WARP.completionRingLifeMul);
+      this.spawnRing(0.6, WARP.completionRingLifeMul);
+    } else {
+      // Soft single ring on non-signal end (optional accent, short)
+      this.spawnRing(0.75, WARP.completionRingLifeMul * 0.85);
+    }
+    this.burst(Math.min(18, Math.floor(this.style.burstCount * 0.35)));
 
-    if (this.active.length === 0) {
+    if (this.active.length === 0 && this.rings.length === 0) {
       this.halt();
       return;
     }
@@ -111,6 +159,12 @@ export class ParticleSystem {
     this.recomputeTarget();
   }
 
+  /** Concurrent OpenCode sessions — tints palette + slight density. */
+  setSessionCount(n: number) {
+    this.sessionCount = Math.max(1, Math.floor(n || 1));
+    if (!this.fadingOut) this.recomputeTarget();
+  }
+
   /** Enable/disable floating token chips on the stream. */
   setTokenFlow(on: boolean) {
     this.tokenFlow = on;
@@ -122,12 +176,31 @@ export class ParticleSystem {
    * @param total absolute token count (for occasional total badge)
    */
   pushTokenDelta(delta: number, total: number) {
-    if (!this.tokenFlow || this.fadingOut) return;
+    if (this.fadingOut || this.phase === "ending") return;
     const d = Math.max(0, Math.floor(delta));
     if (d <= 0) return;
 
     this.ensureLoop();
     this.spawning = true;
+
+    // Heartbeat pulse even when chips off
+    if (d >= WARP.heartbeatMinDelta) {
+      this.heartbeat = Math.min(
+        0.45,
+        this.heartbeat + WARP.heartbeatPulse * (d >= 40 ? 1.4 : 1),
+      );
+      // Rings: Signal only, rate-limited (avoid spam on every token tick)
+      if (
+        this.style.spawnMode === "signal" &&
+        this.ringCooldown <= 0 &&
+        d >= WARP.heartbeatMinDelta
+      ) {
+        this.spawnRing(0.55 + Math.min(0.35, d / 200));
+        this.ringCooldown = WARP.heartbeatRingCooldown;
+      }
+    }
+
+    if (!this.tokenFlow) return;
 
     const budget = Math.floor(this.tokenChipBudget);
     if (budget <= 0) return;
@@ -164,7 +237,23 @@ export class ParticleSystem {
   }
 
   setStyle(id: AnimationStyle) {
-    this.style = getStylePreset(id);
+    const next = getStylePreset(id);
+    const prevMode = this.style.spawnMode;
+    this.style = next;
+    // Drop rings from previous style so modes don't mix mid-gen
+    this.rings.length = 0;
+    this.ringAcc = 0;
+    this.ringCooldown = 0;
+    // Soft intro when switching to Signal while already generating
+    if (
+      this.running &&
+      this.spawning &&
+      !this.fadingOut &&
+      next.spawnMode === "signal" &&
+      prevMode !== "signal"
+    ) {
+      this.spawnRing(0.75);
+    }
   }
 
   /** Settings: per-style particle alpha multiplier (0.15–1.5). */
@@ -179,7 +268,56 @@ export class ParticleSystem {
 
   private recomputeTarget() {
     const base = intensityFromTokens(this.lastTokens);
-    this.targetIntensity = clamp(base * this.userMul, 0, WARP.intensityMax);
+    const sessionBoost =
+      1 + Math.min(0.35, (this.sessionCount - 1) * WARP.multiSessionSpawnMul * 2);
+    let t = base * this.userMul * sessionBoost;
+
+    // Starting kick: strong then eases out over phaseStartingSec
+    if (this.phase === "starting") {
+      const u = clamp(this.phaseAge / WARP.phaseStartingSec, 0, 1);
+      const kick = WARP.phaseStartingKick * (1 - u) * (1 - u);
+      t = Math.max(t, WARP.intensityFloor * 1.05) + kick;
+    }
+
+    // Idle breath when no tokens yet (shimmer, not full field)
+    if (this.lastTokens <= 0 && this.spawning && !this.fadingOut) {
+      const hz = Math.max(0.15, this.style.breathHz || 0.4);
+      const amp =
+        WARP.idleBreathDepth * (0.6 + (this.style.breathAmp || 0.1) * 2);
+      const breath = Math.sin(this.elapsed * Math.PI * 2 * hz) * amp;
+      t = Math.max(WARP.intensityFloorIdle * 0.85, t + breath);
+    }
+
+    this.targetIntensity = clamp(t + this.heartbeat, 0, WARP.intensityMax);
+  }
+
+  private spawnRing(strength = 1, lifeMul = 1) {
+    if (this.rings.length >= WARP.signalRingMax) {
+      this.rings.shift();
+    }
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const minDim = Math.min(w, h) || 400;
+    const pal = this.style.palette;
+    const c = pal[Math.floor(Math.random() * pal.length)] ?? pal[0];
+    const hueShift =
+      this.sessionCount > 1
+        ? WARP.multiSessionHueShift * (this.sessionCount - 1)
+        : 0;
+    // Single alpha path — drawRings applies userStyleAlpha only (no double glowDrawMul)
+    const baseA = this.style.spawnMode === "signal" ? 0.78 : 0.42;
+    const life = WARP.signalRingLife * strength * lifeMul;
+    this.rings.push({
+      r: minDim * 0.02,
+      maxR: minDim * (0.42 + 0.12 * strength),
+      life,
+      maxLife: life,
+      width: WARP.signalRingWidth * (0.85 + 0.3 * strength),
+      hue: (c.h + hueShift) % 360,
+      sat: c.s,
+      light: c.l,
+      alpha: baseA * strength,
+    });
   }
 
   get isRunning() {
@@ -215,6 +353,12 @@ export class ParticleSystem {
     this.running = false;
     this.spawning = false;
     this.fadingOut = false;
+    this.phase = "idle";
+    this.phaseAge = 0;
+    this.heartbeat = 0;
+    this.rings.length = 0;
+    this.ringAcc = 0;
+    this.ringCooldown = 0;
     cancelAnimationFrame(this.raf);
     for (const p of this.active) {
       p.alive = false;
@@ -223,8 +367,8 @@ export class ParticleSystem {
     this.active.length = 0;
     this.spawnAcc = 0;
     this.fade = 1;
-    this.intensity = WARP.intensityFloor;
-    this.targetIntensity = WARP.intensityFloor;
+    this.intensity = WARP.intensityFloorIdle;
+    this.targetIntensity = WARP.intensityFloorIdle;
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     this.ctx.clearRect(0, 0, w, h);
@@ -245,8 +389,14 @@ export class ParticleSystem {
   private spawnRateNow(): number {
     if (!this.spawning) return 0;
     const i = this.intensity;
+    const sessionMul =
+      1 + Math.min(0.4, (this.sessionCount - 1) * WARP.multiSessionSpawnMul);
+    const phaseMul = this.phase === "starting" ? 1.25 : 1;
     return (
-      lerp(WARP.spawnBase, WARP.spawnPeak, clamp(i, 0, 1)) * this.style.spawnMul
+      lerp(WARP.spawnBase, WARP.spawnPeak, clamp(i, 0, 1)) *
+      this.style.spawnMul *
+      sessionMul *
+      phaseMul
     );
   }
 
@@ -327,9 +477,66 @@ export class ParticleSystem {
       case "datastream":
         this.spawnDatastream(isBurst);
         break;
+      case "signal":
+        this.spawnSignal(isBurst);
+        break;
       default:
         this.spawnDirectional(isBurst);
     }
+  }
+
+  private spawnSignal(isBurst: boolean) {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    if (w <= 0 || h <= 0) return;
+
+    const layer = this.pickLayer();
+    const L = WARP.layers[layer];
+    const speedScale = this.speedScaleNow();
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const minDim = Math.min(w, h);
+
+    const ringT = Math.random();
+    const ringR =
+      minDim *
+      lerp(WARP.signalSpawnMin, WARP.signalSpawnMax, ringT) *
+      (layer === 2 ? 0.75 : layer === 0 ? 1.2 : 1);
+    const theta = Math.random() * Math.PI * 2;
+    const x = cx + Math.cos(theta) * ringR;
+    const y = cy + Math.sin(theta) * ringR;
+
+    let rx = x - cx;
+    let ry = y - cy;
+    const dist = Math.hypot(rx, ry) || 1;
+    rx /= dist;
+    ry /= dist;
+    const angJitter = (Math.random() - 0.5) * 0.22;
+    const cosJ = Math.cos(angJitter);
+    const sinJ = Math.sin(angJitter);
+    const dx = rx * cosJ - ry * sinJ;
+    const dy = rx * sinJ + ry * cosJ;
+
+    const distNorm = clamp(dist / (minDim * 0.5), 0, 1);
+    const radialSpeedMul = lerp(
+      WARP.signalSpeedNear,
+      WARP.signalSpeedFar,
+      distNorm,
+    );
+    const base =
+      WARP.baseSpeedMin * 0.55 +
+      Math.random() * (WARP.baseSpeedMax * 0.55 - WARP.baseSpeedMin * 0.55);
+    const speed =
+      base * L.speedMul * speedScale * radialSpeedMul * (isBurst ? 1.25 : 1);
+
+    const sideNoise =
+      (Math.random() - 0.5) * WARP.lateralJitter * 0.25 * L.speedMul;
+    const px = -dy;
+    const py = dx;
+    const vx = dx * speed + px * sideNoise;
+    const vy = dy * speed + py * sideNoise;
+
+    this.initParticle(x, y, vx, vy, layer, isBurst);
   }
 
   private spawnDirectional(isBurst: boolean) {
@@ -753,6 +960,30 @@ export class ParticleSystem {
 
   private update(dt: number) {
     this.elapsed += dt;
+    this.phaseAge += dt;
+
+    if (this.phase === "starting" && this.phaseAge >= WARP.phaseStartingSec) {
+      this.phase = "streaming";
+      this.phaseAge = 0;
+    }
+
+    if (this.ringCooldown > 0) {
+      this.ringCooldown = Math.max(0, this.ringCooldown - dt);
+    }
+
+    // Heartbeat decay + recompute target (also idle breath / starting kick)
+    if (this.heartbeat > 0.001) {
+      this.heartbeat = Math.max(
+        0,
+        this.heartbeat - WARP.heartbeatDecay * dt * this.heartbeat,
+      );
+    } else {
+      this.heartbeat = 0;
+    }
+    if (!this.fadingOut && this.spawning) {
+      this.recomputeTarget();
+    }
+
     // Refill token chip spawn budget
     this.tokenChipBudget = Math.min(
       WARP.tokenChipMaxPerSec,
@@ -771,6 +1002,33 @@ export class ParticleSystem {
       this.fade = Math.max(0, this.fade - dt / WARP.fadeOutDuration);
     }
 
+    // Ambient rings: Signal only (other styles no periodic waves)
+    if (
+      this.spawning &&
+      !this.fadingOut &&
+      this.style.spawnMode === "signal"
+    ) {
+      this.ringAcc += dt;
+      if (this.ringAcc >= WARP.signalRingInterval) {
+        this.ringAcc = 0;
+        this.spawnRing(0.45 + this.intensity * 0.25);
+      }
+    }
+
+    // Expand / age rings — single ease-out from birth fraction
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const ring = this.rings[i];
+      ring.life -= dt;
+      const lifeT = clamp(1 - ring.life / ring.maxLife, 0, 1);
+      // easeOutCubic
+      const e = 1 - (1 - lifeT) ** 3;
+      const r0 = ring.maxR * 0.04;
+      ring.r = r0 + (ring.maxR - r0) * e;
+      if (ring.life <= 0 || lifeT >= 0.99) {
+        this.rings.splice(i, 1);
+      }
+    }
+
     const cap = Math.min(this.hardMax, this.maxParticlesNow());
     const rate = this.spawnRateNow();
     this.spawnAcc += rate * dt;
@@ -782,7 +1040,9 @@ export class ParticleSystem {
 
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
-    const hueShift = WARP.hueShiftSpeed * this.intensity * dt;
+    const hueShift =
+      WARP.hueShiftSpeed * this.intensity * dt +
+      (this.sessionCount > 1 ? WARP.multiSessionHueShift * 0.15 * dt : 0);
     const mode = this.style.spawnMode;
     const cx = w * 0.5;
     const cy = h * 0.5;
@@ -798,7 +1058,7 @@ export class ParticleSystem {
         // Token chips ride stream: lane spring (datastream) or primary direction
         const adx = Math.cos(this.dirAngle);
         const ady = Math.sin(this.dirAngle);
-        if (mode === "tunnel" || mode === "vortex") {
+        if (mode === "tunnel" || mode === "vortex" || mode === "signal") {
           let rx = p.x - cx;
           let ry = p.y - cy;
           const d = Math.hypot(rx, ry) || 1;
@@ -832,6 +1092,30 @@ export class ParticleSystem {
         ry /= d;
         p.vx += rx * accel * 1.15 * dt + (Math.random() - 0.5) * 22 * dt;
         p.vy += ry * accel * 1.15 * dt + (Math.random() - 0.5) * 22 * dt;
+      } else if (mode === "signal") {
+        // Wave field: slower radial + slight tangent so it reads as ripple, not hyperspace
+        let rx = p.x - cx;
+        let ry = p.y - cy;
+        const d = Math.hypot(rx, ry) || 1;
+        rx /= d;
+        ry /= d;
+        const tx = -ry;
+        const ty = rx;
+        const far = clamp(d / (Math.min(w, h) * 0.45), 0, 1);
+        const push = lerp(0.55, 0.95, far);
+        p.vx +=
+          (rx * accel * push + tx * accel * 0.22) * dt +
+          (Math.random() - 0.5) * 10 * dt;
+        p.vy +=
+          (ry * accel * push + ty * accel * 0.22) * dt +
+          (Math.random() - 0.5) * 10 * dt;
+        // Soft speed cap so far rings don't streak like tunnel
+        const spd = Math.hypot(p.vx, p.vy);
+        const cap = 520 * this.speedScaleNow() * (0.7 + p.layer * 0.15);
+        if (spd > cap) {
+          p.vx *= cap / spd;
+          p.vy *= cap / spd;
+        }
       } else if (mode === "orbital") {
         let rx = p.x - cx;
         let ry = p.y - cy;
@@ -932,7 +1216,10 @@ export class ParticleSystem {
       }
     }
 
-    if (this.fadingOut && (this.fade <= 0.01 || this.active.length === 0)) {
+    if (
+      this.fadingOut &&
+      (this.fade <= 0.01 || (this.active.length === 0 && this.rings.length === 0))
+    ) {
       this.halt();
     }
   }
@@ -945,7 +1232,12 @@ export class ParticleSystem {
     const h = canvas.clientHeight;
     ctx.clearRect(0, 0, w, h);
 
-    if (this.active.length === 0 || this.fade <= 0.01) return;
+    if (
+      (this.active.length === 0 && this.rings.length === 0) ||
+      this.fade <= 0.01
+    ) {
+      return;
+    }
 
     const stretchScale = this.stretchScaleNow();
     const glowScale = this.glowScaleNow();
@@ -954,6 +1246,8 @@ export class ParticleSystem {
     ctx.globalCompositeOperation = "lighter";
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+
+    this.drawRings(globalA);
 
     for (let layer = 0; layer <= 2; layer++) {
       for (const p of this.active) {
@@ -970,6 +1264,40 @@ export class ParticleSystem {
     }
 
     ctx.globalCompositeOperation = "source-over";
+  }
+
+  private drawRings(globalA: number) {
+    if (this.rings.length === 0) return;
+    const ctx = this.ctx;
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    // Single multiplier path (spawn alpha already style-aware)
+    const styleA = this.userStyleAlpha;
+    const isSignal = this.style.spawnMode === "signal";
+
+    for (const ring of this.rings) {
+      const lifeT = clamp(ring.life / ring.maxLife, 0, 1);
+      // Soft in, soft out
+      const envelope = Math.sin(lifeT * Math.PI);
+      const a = Math.min(1, ring.alpha * envelope * globalA * styleA * (isSignal ? 1.15 : 0.9));
+      if (a < 0.02 || ring.r < 1) continue;
+      const color = hslToRgb(ring.hue, ring.sat, Math.min(96, ring.light + 4));
+      ctx.beginPath();
+      ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba(color.r, color.g, color.b, a);
+      ctx.lineWidth = ring.width * (0.85 + lifeT * 0.45);
+      ctx.stroke();
+      // Outer halo — Signal only (cheaper on other styles' completion ring)
+      if (isSignal) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, ring.r + ring.width * 1.35, 0, Math.PI * 2);
+        ctx.strokeStyle = rgba(color.r, color.g, color.b, a * 0.38);
+        ctx.lineWidth = ring.width * 0.5;
+        ctx.stroke();
+      }
+    }
   }
 
   private drawTokenChip(p: Particle, globalA: number) {

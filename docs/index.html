@@ -6,7 +6,7 @@
     <title>Grok Overlay for OpenCode</title>
     <meta
       name="description"
-      content="Transparent desktop warp-particle overlay for Grok / OpenCode. Auto show-hide, 10 styles, Windows & macOS."
+      content="Transparent desktop warp-particle overlay for Grok / OpenCode. Auto show-hide, 11 styles (incl. Signal), multi-session, Windows & macOS."
     />
     <link rel="stylesheet" href="./assets/css/site.css" />
   </head>
@@ -59,29 +59,53 @@
         <div class="feature-grid">
           <article class="card">
             <h3>Auto show / hide</h3>
-            <p>Animation appears when Grok is generating and fades away when idle.</p>
-          </article>
-          <article class="card">
-            <h3>Warp Speed particles</h3>
             <p>
-              Smooth Canvas field plus 10 presets: Hyperspace, Datastream, Orbit, Aurora, and more.
+              Overlay appears on generation and hides when every concurrent OpenCode session finishes
+              (any-active multi-process).
             </p>
           </article>
           <article class="card">
-            <h3>Transparent &amp; draggable</h3>
-            <p>No chrome while generating — pure ambient overlay on your desktop.</p>
+            <h3>11 particle styles</h3>
+            <p>
+              Default Hyperspace plus <strong>Signal</strong> waves, Datastream, Orbit, Aurora, and
+              more — reactive start kick, idle shimmer, token heartbeat, completion bloom.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Ambient, no focus steal</h3>
+            <p>
+              Transparent field stays out of the way — generation does not grab IDE focus; Settings
+              still can when you open them.
+            </p>
           </article>
           <article class="card">
             <h3>No extra API key</h3>
-            <p>Works with your existing Grok / OpenCode setup and Premium access.</p>
+            <p>Works with your existing OpenCode setup (any provider, including Grok / xAI).</p>
           </article>
           <article class="card">
-            <h3>Real-time bridge</h3>
-            <p>Python monitor for generation lifecycle + SQLite token polling.</p>
+            <h3>Python bridge</h3>
+            <p>
+              Log detect (OpenCode ≥1.15 + legacy), claimed multi-process log tail, SQLite token
+              poll, quiet TUI (no <code>[EVENT]</code> spam).
+            </p>
           </article>
           <article class="card">
             <h3>Token flow</h3>
-            <p>Floating +N chips ride the stream as tokens increase; per-style alpha controls.</p>
+            <p>Floating +N chips ride the stream; per-style alpha; intensity tracks live tokens.</p>
+          </article>
+          <article class="card">
+            <h3>Project cwd preserved</h3>
+            <p>
+              <code>oc</code> / shim keep your current folder so OpenCode opens the project you
+              launched from.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Windows &amp; macOS</h3>
+            <p>
+              Script-relative tool root (no hard-coded install path) · PowerShell + shell installers
+              · tray + autostart.
+            </p>
           </article>
         </div>
       </section>
@@ -90,9 +114,9 @@
         <h2>🛠 Tech stack</h2>
         <ul class="stack-list">
           <li>Tauri 2</li>
-          <li>Svelte 5</li>
-          <li>Rust</li>
-          <li>Python bridge</li>
+          <li>Svelte 5 + TypeScript</li>
+          <li>Rust + tiny_http</li>
+          <li>Python 3 bridge</li>
           <li>Canvas 2D particles</li>
           <li>Windows &amp; macOS</li>
         </ul>
@@ -110,11 +134,11 @@
         <div class="shot-grid">
           <figure>
             <img src="./assets/media/demo-1.png" alt="Settings panel with animation styles" />
-            <figcaption>Settings — styles, alpha, speed, Test warp</figcaption>
+            <figcaption>Settings — 11 styles (incl. Signal), alpha, speed, Test warp</figcaption>
           </figure>
           <figure>
             <img src="./assets/media/demo-2.png" alt="Warp particles while generating" />
-            <figcaption>Generating — full-bleed particles</figcaption>
+            <figcaption>Generating — full-bleed particles (no focus steal)</figcaption>
           </figure>
         </div>
       </section>
@@ -125,15 +149,16 @@
           <article class="card">
             <h3>Windows</h3>
             <p>
-              Build overlay → <code>install-shim.ps1</code> →
-              <code>install-autostart.ps1</code> → run <code>opencode</code>.
+              Clone repo → build overlay → <code>install-shim.ps1</code> →
+              <code>install-autostart.ps1</code> → run <code>opencode</code> from your project
+              folder. Tool root is script-relative (or <code>AGENT_TOOL_ROOT</code>).
             </p>
           </article>
           <article class="card">
             <h3>macOS</h3>
             <p>
               Build <code>.app</code> → <code>./install-shim.sh</code> →
-              <code>./start-overlay.sh</code> → run <code>opencode</code>.
+              <code>./start-overlay.sh</code> → run <code>opencode</code> from your project.
             </p>
           </article>
         </div>

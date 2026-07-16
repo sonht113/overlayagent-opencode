@@ -118,6 +118,38 @@ export const WARP = {
   tokenChipLifeMin: 0.9,
   tokenChipLifeMax: 1.55,
 
+  /** Reactive: intensity floor while generating at 0 tokens (shimmer) */
+  intensityFloorIdle: 0.22,
+  /** Reactive: starting phase duration (seconds) */
+  phaseStartingSec: 0.55,
+  /** Starting phase intensity kick (blended down over phaseStartingSec) */
+  phaseStartingKick: 0.28,
+  /** Idle breath: modulates intensity when tokens==0 (uses style breathHz) */
+  idleBreathDepth: 0.08,
+  /** Reactive: token heartbeat intensity bump */
+  heartbeatPulse: 0.12,
+  heartbeatDecay: 4.5,
+  /** Min token delta to trigger heartbeat */
+  heartbeatMinDelta: 4,
+  /** Min seconds between heartbeat rings (Signal) */
+  heartbeatRingCooldown: 0.35,
+  /** Multi-session density boost per extra session (cap) */
+  multiSessionSpawnMul: 0.12,
+  multiSessionHueShift: 18,
+
+  /** Signal style: radial spawn band (fraction of min dim) */
+  signalSpawnMin: 0.04,
+  signalSpawnMax: 0.18,
+  signalSpeedNear: 0.4,
+  signalSpeedFar: 1.35,
+  /** Concentric wave rings (Signal only for ambient) */
+  signalRingMax: 4,
+  signalRingLife: 1.15,
+  signalRingInterval: 0.95,
+  signalRingWidth: 3.0,
+  /** Completion bloom ring life scale when ending */
+  completionRingLifeMul: 0.65,
+
   /**
    * Spawn palette anchors (HSL) — higher L for brighter light.
    * cyan / violet / pink / amber / mint
