@@ -38,6 +38,8 @@ Hướng dẫn đầy đủ bên dưới: **setup một lần**, **dùng hàng n
 
 Media: thư mục [`public/`](./public/).
 
+📖 **Docs site (GitHub Pages):** [sonht113.github.io/overlayagent-opencode](https://sonht113.github.io/overlayagent-opencode/)
+
 ---
 
 ## Mục lục
@@ -600,6 +602,11 @@ Tool/   (AGENT_TOOL_ROOT)
 │   ├── demo.gif                # Animation demo
 │   ├── demo-1.png              # Settings panel
 │   └── demo-2.png              # Generating particles
+├── docs/                       # GitHub Pages site
+│   ├── index.html
+│   ├── guide.html
+│   ├── content.md
+│   └── assets/
 ├── oc.cmd / oc.ps1 / oc.sh
 ├── start-overlay.ps1 / .bat / start-overlay.sh
 ├── install-shim.ps1 / install-shim.sh

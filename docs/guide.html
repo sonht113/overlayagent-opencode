@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Guide · Grok Overlay for OpenCode</title>
+    <meta
+      name="description"
+      content="Full setup guide for Agent Overlay + OpenCode (Windows & macOS)."
+    />
+    <link rel="stylesheet" href="./assets/css/site.css" />
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-mark" aria-hidden="true"></span>
+          Grok Overlay
+        </a>
+        <div style="display: flex; gap: 0.5rem; align-items: center">
+          <button class="menu-toggle" id="toc-toggle" type="button">TOC</button>
+          <button class="menu-toggle" id="menu-toggle" type="button">Menu</button>
+        </div>
+        <nav class="nav" id="site-nav">
+          <a href="./index.html">Home</a>
+          <a class="active" href="./guide.html">Full guide</a>
+          <a href="https://github.com/sonht113/overlayagent-opencode" target="_blank" rel="noopener"
+            >GitHub</a
+          >
+          <a class="btn" href="https://github.com/sonht113/overlayagent-opencode" target="_blank" rel="noopener"
+            >Clone repo</a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <div class="guide-layout">
+      <aside class="sidebar" id="sidebar" aria-label="Table of contents">
+        <h2>Mục lục</h2>
+        <ul class="toc" id="toc">
+          <li><a href="#preview">Preview</a></li>
+          <li><a href="#1-tong-quan">1. Tổng quan</a></li>
+          <li><a href="#2-yeu-cau">2. Yêu cầu</a></li>
+          <li><a href="#3-setup-windows">3. Setup Windows</a></li>
+          <li><a href="#4-setup-macos">4. Setup macOS</a></li>
+          <li><a href="#5-dung-hang-ngay">5. Dùng hàng ngày</a></li>
+          <li><a href="#6-settings-overlay">6. Settings overlay</a></li>
+          <li><a href="#7-lenh--api">7. Lệnh &amp; API</a></li>
+          <li><a href="#8-kien-truc">8. Kiến trúc</a></li>
+          <li><a href="#9-cau-truc-thu-muc">9. Cấu trúc thư mục</a></li>
+          <li><a href="#10-troubleshooting">10. Troubleshooting</a></li>
+          <li><a href="#11-go-cai-dat">11. Gỡ cài đặt</a></li>
+          <li><a href="#dev-overlay-developer">Dev overlay</a></li>
+        </ul>
+      </aside>
+
+      <article class="content" id="doc-content">
+        <p style="color: var(--muted)">Loading guide…</p>
+      </article>
+    </div>
+
+    <footer class="site-footer">
+      <p>
+        Full guide ·
+        <a href="./index.html">Home</a> ·
+        <a href="https://github.com/sonht113/overlayagent-opencode">GitHub</a>
+      </p>
+    </footer>
+
+    <script>
+      (function () {
+        const slugify = (text) =>
+          String(text)
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/đ/g, "d")
+            .replace(/[^a-z0-9\s-]/g, "")
+            .trim()
+            .replace(/\s+/g, "-")
+            .replace(/-+/g, "-");
+
+        marked.setOptions({ gfm: true, breaks: false });
+
+        fetch("./content.md")
+          .then((r) => {
+            if (!r.ok) throw new Error("Failed to load content.md");
+            return r.text();
+          })
+          .then((md) => {
+            let html = marked.parse(md);
+            // Rewrite media paths for docs site
+            html = html
+              .replaceAll('src="./public/', 'src="./assets/media/')
+              .replaceAll('src="public/', 'src="./assets/media/')
+              .replaceAll('href="./public/', 'href="./assets/media/');
+
+            const el = document.getElementById("doc-content");
+            el.innerHTML = html;
+
+            // Assign stable ids to headings
+            el.querySelectorAll("h1, h2, h3").forEach((h) => {
+              if (!h.id) h.id = slugify(h.textContent || "");
+            });
+
+            // Rebuild TOC from h2s
+            const toc = document.getElementById("toc");
+            const h2s = el.querySelectorAll("h2[id]");
+            if (h2s.length && toc) {
+              toc.innerHTML = "";
+              h2s.forEach((h) => {
+                const li = document.createElement("li");
+                const a = document.createElement("a");
+                a.href = "#" + h.id;
+                a.textContent = h.textContent;
+                li.appendChild(a);
+                toc.appendChild(li);
+              });
+            }
+          })
+          .catch((err) => {
+            document.getElementById("doc-content").innerHTML =
+              `<p>Could not load guide. Open <code>content.md</code> or view the README on GitHub.</p><pre>${err}</pre>`;
+          })
+          .finally(() => {
+            const s = document.createElement("script");
+            s.src = "./assets/js/nav.js";
+            document.body.appendChild(s);
+          });
+      })();
+    </script>
+  </body>
+</html>

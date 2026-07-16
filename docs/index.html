@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grok Overlay for OpenCode</title>
+    <meta
+      name="description"
+      content="Transparent desktop warp-particle overlay for Grok / OpenCode. Auto show-hide, 10 styles, Windows & macOS."
+    />
+    <link rel="stylesheet" href="./assets/css/site.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-mark" aria-hidden="true"></span>
+          Grok Overlay
+        </a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu">
+          Menu
+        </button>
+        <nav class="nav" id="site-nav">
+          <a class="active" href="./index.html">Home</a>
+          <a href="./guide.html">Full guide</a>
+          <a href="https://github.com/sonht113/overlayagent-opencode" target="_blank" rel="noopener"
+            >GitHub</a
+          >
+          <a class="btn" href="./guide.html">Get started</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-badge">OpenCode · Grok · Desktop overlay</div>
+        <h1>
+          Grok Overlay for
+          <span>OpenCode</span>
+        </h1>
+        <p class="hero-lead">
+          A sleek, transparent desktop overlay that automatically triggers a beautiful
+          <strong>Warp Speed</strong> particle animation when using Grok through OpenCode.
+        </p>
+        <div class="hero-actions">
+          <a class="btn-primary" href="./guide.html">Read the full guide</a>
+          <a
+            class="btn-ghost"
+            href="https://github.com/sonht113/overlayagent-opencode"
+            target="_blank"
+            rel="noopener"
+            >View on GitHub</a
+          >
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>✨ Features</h2>
+        <div class="feature-grid">
+          <article class="card">
+            <h3>Auto show / hide</h3>
+            <p>Animation appears when Grok is generating and fades away when idle.</p>
+          </article>
+          <article class="card">
+            <h3>Warp Speed particles</h3>
+            <p>
+              Smooth Canvas field plus 10 presets: Hyperspace, Datastream, Orbit, Aurora, and more.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Transparent &amp; draggable</h3>
+            <p>No chrome while generating — pure ambient overlay on your desktop.</p>
+          </article>
+          <article class="card">
+            <h3>No extra API key</h3>
+            <p>Works with your existing Grok / OpenCode setup and Premium access.</p>
+          </article>
+          <article class="card">
+            <h3>Real-time bridge</h3>
+            <p>Python monitor for generation lifecycle + SQLite token polling.</p>
+          </article>
+          <article class="card">
+            <h3>Token flow</h3>
+            <p>Floating +N chips ride the stream as tokens increase; per-style alpha controls.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>🛠 Tech stack</h2>
+        <ul class="stack-list">
+          <li>Tauri 2</li>
+          <li>Svelte 5</li>
+          <li>Rust</li>
+          <li>Python bridge</li>
+          <li>Canvas 2D particles</li>
+          <li>Windows &amp; macOS</li>
+        </ul>
+        <p class="note">
+          ⚠️ Actively developed. Contributions and feedback are welcome on
+          <a href="https://github.com/sonht113/overlayagent-opencode">GitHub</a>.
+        </p>
+      </section>
+
+      <section class="section">
+        <h2>Preview</h2>
+        <div class="preview-block">
+          <img src="./assets/media/demo.gif" alt="Agent Overlay demo animation" width="960" />
+        </div>
+        <div class="shot-grid">
+          <figure>
+            <img src="./assets/media/demo-1.png" alt="Settings panel with animation styles" />
+            <figcaption>Settings — styles, alpha, speed, Test warp</figcaption>
+          </figure>
+          <figure>
+            <img src="./assets/media/demo-2.png" alt="Warp particles while generating" />
+            <figcaption>Generating — full-bleed particles</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Quick start</h2>
+        <div class="feature-grid">
+          <article class="card">
+            <h3>Windows</h3>
+            <p>
+              Build overlay → <code>install-shim.ps1</code> →
+              <code>install-autostart.ps1</code> → run <code>opencode</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>macOS</h3>
+            <p>
+              Build <code>.app</code> → <code>./install-shim.sh</code> →
+              <code>./start-overlay.sh</code> → run <code>opencode</code>.
+            </p>
+          </article>
+        </div>
+        <p style="margin-top: 1.25rem">
+          <a class="btn-primary" href="./guide.html">Open setup guide (VI / EN)</a>
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Grok Overlay for OpenCode ·
+        <a href="https://github.com/sonht113/overlayagent-opencode">sonht113/overlayagent-opencode</a>
+      </p>
+    </footer>
+    <script src="./assets/js/nav.js"></script>
+  </body>
+</html>

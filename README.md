@@ -36,6 +36,8 @@ A sleek, transparent desktop overlay that automatically triggers a beautiful **W
 
 Media: [`public/`](./public/). Full setup guide (Windows + macOS) below.
 
+📖 **Docs site (GitHub Pages):** [sonht113.github.io/overlayagent-opencode](https://sonht113.github.io/overlayagent-opencode/)
+
 ---
 
 ## Mục lục / Full guide
@@ -598,6 +600,11 @@ Tool/   (AGENT_TOOL_ROOT)
 │   ├── demo.gif                # Animation demo
 │   ├── demo-1.png              # Settings panel
 │   └── demo-2.png              # Generating particles
+├── docs/                       # GitHub Pages site
+│   ├── index.html
+│   ├── guide.html
+│   ├── content.md
+│   └── assets/
 ├── oc.cmd / oc.ps1 / oc.sh
 ├── start-overlay.ps1 / .bat / start-overlay.sh
 ├── install-shim.ps1 / install-shim.sh
