@@ -10,8 +10,13 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ToolRoot = if ($env:AGENT_TOOL_ROOT) { $env:AGENT_TOOL_ROOT } else { "C:\Work\Tool" }
 $ShimDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Prefer env, else repo root (parent of shim/)
+$ToolRoot = if ($env:AGENT_TOOL_ROOT) {
+  $env:AGENT_TOOL_ROOT
+} else {
+  (Resolve-Path (Join-Path $ShimDir "..")).Path
+}
 $env:AGENT_OPENCODE_SHIM_DIR = $ShimDir
 $env:AGENT_TOOL_ROOT = $ToolRoot
 
@@ -105,16 +110,13 @@ if (-not $usePy -and -not $py) {
 }
 
 $monitor = Join-Path $ToolRoot "opencode_monitor.py"
-Push-Location $ToolRoot
-try {
-  if (Test-Path (Join-Path $ToolRoot "opencode_bridge")) {
-    if ($usePy) { & py -3 -m opencode_bridge run @Args }
-    else { & $py -m opencode_bridge run @Args }
-    exit $LASTEXITCODE
-  }
-  if ($usePy) { & py -3 $monitor @Args }
-  else { & $py $monitor @Args }
+# Keep caller's cwd so OpenCode opens the project the user is in.
+$env:PYTHONPATH = if ($env:PYTHONPATH) { "$ToolRoot$([IO.Path]::PathSeparator)$env:PYTHONPATH" } else { $ToolRoot }
+if (Test-Path (Join-Path $ToolRoot "opencode_bridge")) {
+  if ($usePy) { & py -3 -m opencode_bridge run @Args }
+  else { & $py -m opencode_bridge run @Args }
   exit $LASTEXITCODE
-} finally {
-  Pop-Location
 }
+if ($usePy) { & py -3 $monitor @Args }
+else { & $py $monitor @Args }
+exit $LASTEXITCODE

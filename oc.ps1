@@ -10,7 +10,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ToolRoot = "C:\Work\Tool"
+# Script-relative root (override with AGENT_TOOL_ROOT)
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ToolRoot = if ($env:AGENT_TOOL_ROOT) { $env:AGENT_TOOL_ROOT } else { $ScriptDir }
 $StartOverlay = Join-Path $ToolRoot "start-overlay.ps1"
 $HealthUrl = "http://127.0.0.1:9876/health"
 
@@ -52,15 +54,13 @@ if (-not $usePyLauncher -and -not $py) {
   exit 1
 }
 
-Push-Location $ToolRoot
-try {
-  Write-Host "[oc] OpenCode via monitor..."
-  if ($usePyLauncher) {
-    & py -3 -m opencode_bridge run @OpenCodeArgs
-  } else {
-    & $py -m opencode_bridge run @OpenCodeArgs
-  }
-  exit $LASTEXITCODE
-} finally {
-  Pop-Location
+# Keep caller's cwd so OpenCode opens the project the user is in.
+$env:AGENT_TOOL_ROOT = $ToolRoot
+$env:PYTHONPATH = if ($env:PYTHONPATH) { "$ToolRoot$([IO.Path]::PathSeparator)$env:PYTHONPATH" } else { $ToolRoot }
+Write-Host "[oc] OpenCode via monitor..."
+if ($usePyLauncher) {
+  & py -3 -m opencode_bridge run @OpenCodeArgs
+} else {
+  & $py -m opencode_bridge run @OpenCodeArgs
 }
+exit $LASTEXITCODE

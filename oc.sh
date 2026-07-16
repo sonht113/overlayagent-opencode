@@ -39,7 +39,7 @@ else
   exit 1
 fi
 
-cd "$AGENT_TOOL_ROOT"
 export PYTHONPATH="${AGENT_TOOL_ROOT}${PYTHONPATH:+:$PYTHONPATH}"
 echo "[oc] OpenCode via monitor..."
+# Keep caller's cwd so OpenCode opens the project the user is in.
 exec "$PY" -m opencode_bridge run "$@"

@@ -18,5 +18,5 @@ else
   exit 1
 fi
 
-cd "$AGENT_TOOL_ROOT"
+# Keep caller's cwd so OpenCode opens the project the user is in.
 exec "$PY" -m opencode_bridge run "$@"
