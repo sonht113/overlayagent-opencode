@@ -9,9 +9,7 @@ Desktop overlay tối giản cho **Grok / OpenCode**: animation particles khi AI
 
 ### Preview
 
-<video src="../public/demo.mp4" controls width="720" title="Agent Overlay demo"></video>
-
-[▶ Demo video (MP4)](../public/demo.mp4)
+![Agent Overlay demo](../public/demo.gif)
 
 | Settings | Generating |
 |:---:|:---:|

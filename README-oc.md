@@ -26,19 +26,15 @@ Hướng dẫn đầy đủ bên dưới: **setup một lần**, **dùng hàng n
 
 ### Preview
 
-<video src="./public/demo.mp4" controls width="720" title="Agent Overlay demo"></video>
-
-<p align="center">
-  <a href="./public/demo.mp4">▶ Xem demo (MP4)</a>
-</p>
+![Agent Overlay demo](./public/demo.gif)
 
 | Settings panel | Generating (warp particles) |
 |:---:|:---:|
 | ![Settings — animation styles, alpha, speed](./public/demo-1.png) | ![Overlay particles khi AI generate](./public/demo-2.png) |
 
+- **demo.gif** — demo animation end-to-end  
 - **demo-1** — panel Settings (10 styles, Style alpha, Token flow, intensity, speed, Test warp)  
 - **demo-2** — cửa sổ trong suốt, particles full-bleed khi Grok/OpenCode đang generate  
-- **demo.mp4** — clip demo end-to-end  
 
 Media: thư mục [`public/`](./public/).
 
@@ -601,7 +597,7 @@ File: `$AGENT_TOOL_ROOT/.agent-bridge/monitoring.enabled` (`1` / `0`).
 Tool/   (AGENT_TOOL_ROOT)
 ├── README-oc.md
 ├── public/                     # demo media (README)
-│   ├── demo.mp4
+│   ├── demo.gif                # Animation demo
 │   ├── demo-1.png              # Settings panel
 │   └── demo-2.png              # Generating particles
 ├── oc.cmd / oc.ps1 / oc.sh

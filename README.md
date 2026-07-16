@@ -24,19 +24,15 @@ A sleek, transparent desktop overlay that automatically triggers a beautiful **W
 
 ### Preview
 
-<video src="./public/demo.mp4" controls width="720" title="Agent Overlay demo"></video>
-
-<p align="center">
-  <a href="./public/demo.mp4">▶ Watch demo (MP4)</a>
-</p>
+![Agent Overlay demo](./public/demo.gif)
 
 | Settings panel | Generating (warp particles) |
 |:---:|:---:|
 | ![Settings — animation styles, alpha, speed](./public/demo-1.png) | ![Overlay particles while AI generates](./public/demo-2.png) |
 
+- **demo.gif** — End-to-end animation demo  
 - **demo-1** — Settings (styles, Style alpha, Token flow, intensity, speed, Test warp)  
 - **demo-2** — Transparent overlay, full-bleed particles while generating  
-- **demo.mp4** — End-to-end clip  
 
 Media: [`public/`](./public/). Full setup guide (Windows + macOS) below.
 
@@ -599,7 +595,7 @@ File: `$AGENT_TOOL_ROOT/.agent-bridge/monitoring.enabled` (`1` / `0`).
 Tool/   (AGENT_TOOL_ROOT)
 ├── README-oc.md
 ├── public/                     # demo media (README)
-│   ├── demo.mp4
+│   ├── demo.gif                # Animation demo
 │   ├── demo-1.png              # Settings panel
 │   └── demo-2.png              # Generating particles
 ├── oc.cmd / oc.ps1 / oc.sh
