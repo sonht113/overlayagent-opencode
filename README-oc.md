@@ -1,13 +1,13 @@
-# Grok Overlay for OpenCode
+# Agent Overlay for OpenCode
 
-A sleek, transparent desktop overlay that automatically triggers a beautiful **Warp Speed** particle animation when using Grok through **[OpenCode](https://opencode.ai/)**.
+A sleek, transparent desktop overlay that automatically triggers a beautiful **Warp Speed** particle animation when using **[OpenCode](https://opencode.ai/)** — any provider (xAI/Grok, and more).
 
 ### ✨ Features
 
-- Auto show/hide animation when Grok is generating  
+- Auto show/hide animation when OpenCode is generating (any provider)  
 - Smooth, high-performance particle animation (**11 presets**: Hyperspace, **Signal**, Datastream, Orbit, …) · multi-session · reactive phases  
 - Fully transparent & draggable overlay  
-- Works with your existing Grok / OpenCode setup (**no extra API key** needed)  
+- Works with your existing OpenCode setup (**no extra API key** needed)  
 - Built with **Tauri** (Rust) + **Svelte**  
 - Real-time monitoring via **Python** bridge (logs + SQLite token poll)  
 - Token flow chips on the stream · per-style alpha · Windows & macOS  
@@ -34,7 +34,7 @@ Hướng dẫn đầy đủ bên dưới: **setup một lần**, **dùng hàng n
 
 - **demo.gif** — demo animation end-to-end  
 - **demo-1** — panel Settings (11 styles incl. Signal, Style alpha, Token flow, intensity, speed, Test warp)  
-- **demo-2** — cửa sổ trong suốt, particles full-bleed khi Grok/OpenCode đang generate  
+- **demo-2** — cửa sổ trong suốt, particles full-bleed khi OpenCode đang generate  
 
 Media: thư mục [`public/`](./public/).
 
@@ -60,7 +60,7 @@ Media: thư mục [`public/`](./public/).
 
 ## 1. Tổng quan
 
-**Agent Overlay** là cửa sổ desktop trong suốt (Tauri) hiển thị animation particles khi Grok/OpenCode đang generate. Có **nhiều style** (Hyperspace, Datastream, Orbit, …) và chỉnh **alpha theo style**.
+**Agent Overlay** là cửa sổ desktop trong suốt (Tauri) hiển thị animation particles khi OpenCode đang generate (mọi provider). Có **nhiều style** (Hyperspace, Datastream, Orbit, …) và chỉnh **alpha theo style**.
 
 | Trạng thái | Hành vi |
 |------------|---------|
@@ -314,7 +314,7 @@ hoặc:
 oc
 ```
 
-4. Làm việc / generate với **Grok** như bình thường.  
+4. Làm việc / generate với OpenCode như bình thường (mọi provider).  
 5. Overlay **tự hiện** khi generate, **tự ẩn** khi xong.  
 6. **Không** còn dòng `[EVENT] …` đè lên ô chat (đã tắt print console).
 
