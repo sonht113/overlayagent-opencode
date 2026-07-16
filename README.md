@@ -1,30 +1,48 @@
-# Agent Overlay + OpenCode
+# Grok Overlay for OpenCode
 
-Hướng dẫn đầy đủ: **setup một lần**, **dùng hàng ngày**, kiến trúc, settings, troubleshooting.
+A sleek, transparent desktop overlay that automatically triggers a beautiful **Warp Speed** particle animation when using Grok through **[OpenCode](https://opencode.ai/)**.
 
-> **Trạng thái:** đã ổn định — `opencode` vào TUI bình thường, overlay particles tự hiện/ẩn khi generate, **không in `[EVENT]` lên chat** (log chỉ ghi file / panel diagnostics).
+### ✨ Features
+
+- Auto show/hide animation when Grok is generating  
+- Smooth, high-performance particle animation (Warp Speed style + **10 presets**: Hyperspace, Datastream, Orbit, …)  
+- Fully transparent & draggable overlay  
+- Works with your existing Grok / OpenCode setup (**no extra API key** needed)  
+- Built with **Tauri** (Rust) + **Svelte**  
+- Real-time monitoring via **Python** bridge (logs + SQLite token poll)  
+- Token flow chips on the stream · per-style alpha · Windows & macOS  
+
+### 🛠 Tech Stack
+
+- Tauri 2 + Svelte 5  
+- Python (OpenCode log / DB monitoring)  
+- Canvas 2D particle system  
+
+> ⚠️ Actively developed. Contributions and feedback are welcome!
+
+> **Status:** stable for daily use — OpenCode TUI works normally, particles auto show/hide, no `[EVENT]` spam on chat (logs go to file / settings diagnostics).
 
 ### Preview
 
 <video src="./public/demo.mp4" controls width="720" title="Agent Overlay demo"></video>
 
 <p align="center">
-  <a href="./public/demo.mp4">▶ Xem demo (MP4)</a>
+  <a href="./public/demo.mp4">▶ Watch demo (MP4)</a>
 </p>
 
 | Settings panel | Generating (warp particles) |
 |:---:|:---:|
-| ![Settings — animation styles, alpha, speed](./public/demo-1.png) | ![Overlay particles khi AI generate](./public/demo-2.png) |
+| ![Settings — animation styles, alpha, speed](./public/demo-1.png) | ![Overlay particles while AI generates](./public/demo-2.png) |
 
-- **demo-1** — panel Settings (10 styles, Style alpha, Token flow, intensity, speed, Test warp)  
-- **demo-2** — cửa sổ trong suốt, particles full-bleed khi Grok/OpenCode đang generate  
-- **demo.mp4** — clip demo end-to-end  
+- **demo-1** — Settings (styles, Style alpha, Token flow, intensity, speed, Test warp)  
+- **demo-2** — Transparent overlay, full-bleed particles while generating  
+- **demo.mp4** — End-to-end clip  
 
-Media: thư mục [`public/`](./public/).
+Media: [`public/`](./public/). Full setup guide (Windows + macOS) below.
 
 ---
 
-## Mục lục
+## Mục lục / Full guide
 
 1. [Tổng quan](#1-tổng-quan)
 2. [Yêu cầu](#2-yêu-cầu)

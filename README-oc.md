@@ -1,8 +1,28 @@
-# Agent Overlay + OpenCode
+# Grok Overlay for OpenCode
 
-Hướng dẫn đầy đủ: **setup một lần**, **dùng hàng ngày**, kiến trúc, settings, troubleshooting.
+A sleek, transparent desktop overlay that automatically triggers a beautiful **Warp Speed** particle animation when using Grok through **[OpenCode](https://opencode.ai/)**.
+
+### ✨ Features
+
+- Auto show/hide animation when Grok is generating  
+- Smooth, high-performance particle animation (Warp Speed style + **10 presets**: Hyperspace, Datastream, Orbit, …)  
+- Fully transparent & draggable overlay  
+- Works with your existing Grok / OpenCode setup (**no extra API key** needed)  
+- Built with **Tauri** (Rust) + **Svelte**  
+- Real-time monitoring via **Python** bridge (logs + SQLite token poll)  
+- Token flow chips on the stream · per-style alpha · Windows & macOS  
+
+### 🛠 Tech Stack
+
+- Tauri 2 + Svelte 5  
+- Python (OpenCode log / DB monitoring)  
+- Canvas 2D particle system  
+
+> ⚠️ Actively developed. Contributions and feedback are welcome!
 
 > **Trạng thái:** đã ổn định — `opencode` vào TUI bình thường, overlay particles tự hiện/ẩn khi generate, **không in `[EVENT]` lên chat** (log chỉ ghi file / panel diagnostics).
+
+Hướng dẫn đầy đủ bên dưới: **setup một lần**, **dùng hàng ngày**, kiến trúc, settings, troubleshooting.
 
 ### Preview
 
