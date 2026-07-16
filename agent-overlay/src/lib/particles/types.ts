@@ -12,7 +12,8 @@ export type AnimationStyle =
   | "spark"
   | "orbit"
   | "vortex"
-  | "datastream";
+  | "datastream"
+  | "signal";
 
 export type SpawnMode =
   | "directional"
@@ -20,7 +21,11 @@ export type SpawnMode =
   | "spark"
   | "orbital"
   | "vortex"
-  | "datastream";
+  | "datastream"
+  | "signal";
+
+/** Lifecycle of a generation for reactive intensity / bloom. */
+export type GenPhase = "idle" | "starting" | "streaming" | "ending";
 
 export interface Particle {
   x: number;
