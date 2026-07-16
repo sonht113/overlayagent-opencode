@@ -11,10 +11,10 @@ import {
   openSettings,
   pushRecentEvent,
   setBridgeReady,
-  setSessionMeta,
-  setTokenCount,
-  startGeneration,
   stopGeneration,
+  trackOpencodeEnd,
+  trackOpencodeStart,
+  updateOpencodeTokens,
 } from "$lib/stores/generation.svelte";
 import type {
   GenerationEndData,
@@ -31,6 +31,7 @@ const unlistens: UnlistenFn[] = [];
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 /** Timestamp of last live generation_start (for min-visible debounce) */
 let lastStartAt = 0;
+let onStaleCleared: (() => void) | null = null;
 
 function isTauriRuntime(): boolean {
   return (
@@ -79,13 +80,17 @@ function cancelHideTimer() {
   }
 }
 
-export async function showOverlayWindow(): Promise<void> {
+/** Show ambient overlay without stealing IDE focus. */
+export async function showOverlayWindow(opts?: { focus?: boolean }): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
     const win = getCurrentWindow();
     await win.show();
     await win.setAlwaysOnTop(true);
-    await win.setFocus();
+    // Focus only for explicit UI (settings/tray) — never on generation_start
+    if (opts?.focus) {
+      await win.setFocus();
+    }
   } catch (e) {
     console.warn("[opencode bridge] show window failed", e);
   }
@@ -100,7 +105,7 @@ export async function hideOverlayWindow(): Promise<void> {
   }
 }
 
-/** Schedule hide after fade, respecting minVisibleMs from last start. */
+/** Schedule hide after fade, only if no OpenCode sessions remain active. */
 function scheduleHideAfterEnd() {
   cancelHideTimer();
   const elapsed = Date.now() - lastStartAt;
@@ -110,8 +115,12 @@ function scheduleHideAfterEnd() {
 
   hideTimer = setTimeout(async () => {
     hideTimer = null;
-    if (generation.isGenerating) {
-      clearLiveSession();
+    // Another generation started (or still running) — keep overlay
+    if (
+      generation.isGenerating ||
+      generation.liveSessionActive ||
+      Object.keys(generation.activeSessions).length > 0
+    ) {
       return;
     }
     clearLiveSession();
@@ -128,6 +137,16 @@ export async function startOpencodeBridge(): Promise<() => void> {
 
   started = true;
 
+  onStaleCleared = () => {
+    if (!generation.autoHideOnEnd) return;
+    if (Object.keys(generation.activeSessions).length > 0) return;
+    scheduleHideAfterEnd();
+    pushRecentEvent("sessions_stale_cleared");
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("agent-overlay:sessions-stale-cleared", onStaleCleared);
+  }
+
   try {
     unlistens.push(
       await listen<ServerReadyPayload>("opencode://server_ready", (ev) => {
@@ -140,7 +159,7 @@ export async function startOpencodeBridge(): Promise<() => void> {
     unlistens.push(
       await listen("overlay://open_settings", async () => {
         cancelHideTimer();
-        await showOverlayWindow();
+        await showOverlayWindow({ focus: true });
         openSettings();
         pushRecentEvent("open_settings");
       }),
@@ -149,8 +168,8 @@ export async function startOpencodeBridge(): Promise<() => void> {
     unlistens.push(
       await listen("overlay://hide", async () => {
         closeSettings();
+        // Force-idle: clear OpenCode sessions + manual state
         stopGeneration("manual");
-        clearLiveSession();
         cancelHideTimer();
         await hideOverlayWindow();
         pushRecentEvent("hide");
@@ -162,28 +181,38 @@ export async function startOpencodeBridge(): Promise<() => void> {
         cancelHideTimer();
         closeSettings();
         const data = ev.payload ?? {};
-        setSessionMeta({
+        trackOpencodeStart({
           provider: data.provider,
           model: data.model,
           session_id: data.session_id,
+          bridge_pid: data.bridge_pid,
         });
-        setTokenCount(0);
         lastStartAt = Date.now();
-        startGeneration("opencode");
+        // Ambient only — do not steal focus from the IDE / OpenCode TUI
         await showOverlayWindow();
-        pushRecentEvent(
-          "generation_start",
-          [data.model, data.provider].filter(Boolean).join(" · ") || undefined,
-        );
+        const detail = [data.model, data.provider, data.bridge_pid != null ? `pid ${data.bridge_pid}` : ""]
+          .filter(Boolean)
+          .join(" · ");
+        pushRecentEvent("generation_start", detail || undefined);
       }),
     );
 
+    let lastTokenLogAt = 0;
     unlistens.push(
       await listen<TokenBreakdown>("opencode://tokens_update", (ev) => {
-        const n = aggregateTokens(ev.payload);
-        setTokenCount(n);
-        // Don't spam log every token tick — only milestone-ish
-        if (n > 0 && n % 50 < 5) {
+        const payload = ev.payload ?? {};
+        const n = aggregateTokens(payload);
+        updateOpencodeTokens(
+          {
+            session_id: payload.session_id as string | null | undefined,
+            bridge_pid: payload.bridge_pid as number | string | null | undefined,
+          },
+          n,
+        );
+        // Rate-limit diagnostic log (once per second max)
+        const now = Date.now();
+        if (n > 0 && now - lastTokenLogAt > 1000) {
+          lastTokenLogAt = now;
           pushRecentEvent("tokens_update", String(n));
         }
       }),
@@ -193,15 +222,19 @@ export async function startOpencodeBridge(): Promise<() => void> {
       await listen<GenerationEndData>("opencode://generation_end", async (ev) => {
         const data = ev.payload ?? {};
         const count = aggregateTokens(data);
-        if (count > 0) setTokenCount(count);
-
-        const wasLive = generation.liveSessionActive;
-        stopGeneration("opencode");
+        const allDone = trackOpencodeEnd(
+          {
+            session_id: data.session_id,
+            bridge_pid: data.bridge_pid,
+          },
+          count,
+        );
         closeSettings();
         pushRecentEvent("generation_end", count > 0 ? `${count} tok` : undefined);
 
-        const shouldHide = wasLive && generation.autoHideOnEnd;
-        if (!shouldHide) {
+        // Only hide when *all* concurrent OpenCode gens finished
+        if (!allDone) return;
+        if (!generation.autoHideOnEnd) {
           clearLiveSession();
           return;
         }
@@ -209,12 +242,16 @@ export async function startOpencodeBridge(): Promise<() => void> {
       }),
     );
 
-    if (!generation.bridgeConnected) {
-      generation.bridgeConnected = true;
-      generation.eventPort = generation.eventPort ?? 9876;
-    }
+    // Do not mark connected until server_ready — optimistic flag misleads UI
   } catch (e) {
     started = false;
+    while (unlistens.length) {
+      try {
+        unlistens.pop()?.();
+      } catch {
+        /* ignore */
+      }
+    }
     console.error("[opencode bridge] failed to start", e);
   }
 
@@ -223,6 +260,13 @@ export async function startOpencodeBridge(): Promise<() => void> {
 
 export function stopOpencodeBridge() {
   cancelHideTimer();
+  if (typeof window !== "undefined" && onStaleCleared) {
+    window.removeEventListener(
+      "agent-overlay:sessions-stale-cleared",
+      onStaleCleared,
+    );
+  }
+  onStaleCleared = null;
   while (unlistens.length) {
     const u = unlistens.pop();
     try {

@@ -34,6 +34,8 @@ export interface GenerationStartData {
   provider?: string | null;
   model?: string | null;
   session_id?: string | null;
+  /** Python bridge process id (distinguishes concurrent OpenCode processes) */
+  bridge_pid?: number | string | null;
   [key: string]: unknown;
 }
 
@@ -46,12 +48,15 @@ export interface TokenBreakdown {
   cache_write?: number;
   total?: number;
   tokens?: number;
+  session_id?: string | null;
+  bridge_pid?: number | string | null;
   final_tokens?: TokenBreakdown | Record<string, number>;
   [key: string]: unknown;
 }
 
 export interface GenerationEndData extends TokenBreakdown {
   session_id?: string | null;
+  bridge_pid?: number | string | null;
   final_tokens?: TokenBreakdown | Record<string, number>;
 }
 
