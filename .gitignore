@@ -1,0 +1,40 @@
+# Local bridge state (machine-specific paths)
+.agent-bridge/
+
+# Dependencies & builds
+node_modules/
+**/node_modules/
+**/target/
+**/build/
+**/.svelte-kit/
+**/dist/
+**/gen/schemas/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+**/auth.json
+**/mcp-auth.json
+**/account.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Tauri / Vite noise
+vite.config.*.timestamp-*
+*.msi
+*.exe
+!shim/**

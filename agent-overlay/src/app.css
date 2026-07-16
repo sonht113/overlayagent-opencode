@@ -1,0 +1,55 @@
+/* Transparent overlay shell — must stay transparent for desktop see-through */
+:root {
+  color-scheme: dark;
+  --bg-glass: rgba(12, 14, 22, 0.72);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --text: #e2e8f0;
+  --text-muted: rgba(203, 213, 225, 0.62);
+  --accent-cyan: #5bdeff;
+  --accent-violet: #a78bfa;
+  --accent-pink: #f472b6;
+  --radius: 14px;
+  font-family:
+    "Segoe UI",
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+body {
+  min-height: 100vh;
+}
+
+#app,
+body > div {
+  height: 100%;
+  background: transparent;
+}

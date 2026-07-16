@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# PATH shim: intercepts `opencode` and runs the monitored wrapper.
+# Real binary path is stored in $AGENT_TOOL_ROOT/.agent-bridge/config.json
+set -euo pipefail
+
+SHIM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export AGENT_OPENCODE_SHIM_DIR="$SHIM_DIR"
+export AGENT_TOOL_ROOT="${AGENT_TOOL_ROOT:-$(cd "$SHIM_DIR/.." && pwd)}"
+export PYTHONPATH="${AGENT_TOOL_ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+
+PY=""
+if command -v python3 >/dev/null 2>&1; then
+  PY=python3
+elif command -v python >/dev/null 2>&1; then
+  PY=python
+else
+  echo "ERROR: Python not found" >&2
+  exit 1
+fi
+
+cd "$AGENT_TOOL_ROOT"
+exec "$PY" -m opencode_bridge run "$@"
