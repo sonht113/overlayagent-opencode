@@ -1,6 +1,6 @@
 # Agent Overlay
 
-Desktop overlay tối giản cho **Grok / OpenCode**: animation particles khi AI đang generate, **ẩn hoàn toàn** khi idle.
+Desktop overlay tối giản cho **OpenCode** (any provider): animation particles khi AI đang generate, **ẩn hoàn toàn** khi idle.
 
 **Stack:** Tauri 2 · Svelte 5 · Canvas 2D · HTTP localhost bridge  
 

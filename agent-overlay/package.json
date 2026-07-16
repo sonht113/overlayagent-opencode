@@ -1,7 +1,7 @@
 {
   "name": "agent-overlay",
   "version": "0.1.0",
-  "description": "Floating Grok generation overlay with particle animation (Tauri 2 + Svelte 5)",
+  "description": "Floating Agent Overlay for OpenCode with particle animation (Tauri 2 + Svelte 5)",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

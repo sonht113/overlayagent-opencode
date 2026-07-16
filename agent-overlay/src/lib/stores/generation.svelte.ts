@@ -380,7 +380,12 @@ export function trackOpencodeEnd(
   },
   finalTokens?: number,
 ): boolean {
-  const key = resolveActiveSessionKey(meta);
+  let key = resolveActiveSessionKey(meta);
+  // Sole active session + unscoped end (missing session_id) → end that session.
+  // Never guess when ≥2 sessions (multi-process Mac/Windows safe).
+  if (!key && activeSessionCount() === 1) {
+    key = Object.keys(generation.activeSessions)[0] ?? null;
+  }
   if (key && generation.activeSessions[key]) {
     const next = { ...generation.activeSessions };
     delete next[key];
@@ -403,9 +408,17 @@ export function updateOpencodeTokens(
   tokens: number,
 ) {
   const n = Math.max(0, Math.floor(Number.isFinite(tokens) ? tokens : 0));
-  const key = resolveActiveSessionKey(meta) || sessionKeyFromEvent(meta);
-  const cur = generation.activeSessions[key];
-  if (cur) {
+  let key = resolveActiveSessionKey(meta);
+  // Orphan token ticks often omit session_id (stream_est). If exactly one
+  // OpenCode session is live, attach there — never when ≥2 (multi-process safe).
+  if (!key && activeSessionCount() === 1) {
+    key = Object.keys(generation.activeSessions)[0] ?? null;
+  }
+  if (!key) {
+    key = sessionKeyFromEvent(meta);
+  }
+  const cur = key ? generation.activeSessions[key] : undefined;
+  if (cur && key) {
     if (cur.tokens === n) {
       // Still refresh liveness without cloning the map when tokens unchanged
       cur.lastSeenAt = Date.now();

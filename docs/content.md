@@ -1,6 +1,6 @@
-# Grok Overlay for OpenCode
+# Agent Overlay for OpenCode
 
-A sleek, transparent desktop overlay that automatically triggers a beautiful **Warp Speed** particle animation when using Grok through **[OpenCode](https://opencode.ai/)**.
+A sleek, transparent desktop overlay that automatically triggers a beautiful **Warp Speed** particle animation when using **[OpenCode](https://opencode.ai/)** — any provider (xAI/Grok, and more).
 
 ### ✨ Features
 
@@ -316,7 +316,7 @@ hoặc:
 oc
 ```
 
-4. Làm việc / generate với **Grok** như bình thường.  
+4. Làm việc / generate với OpenCode như bình thường (mọi provider).  
 5. Overlay **tự hiện** khi generate, **tự ẩn** khi xong.  
 6. **Không** còn dòng `[EVENT] …` đè lên ô chat (đã tắt print console).
 
