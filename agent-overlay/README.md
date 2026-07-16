@@ -21,12 +21,13 @@ Desktop overlay tối giản cho **Grok / OpenCode**: animation particles khi AI
 
 | Tính năng | Mô tả |
 |-----------|--------|
-| **10 animation styles** | Hyperspace, Classic, Aurora, Neon rain, Embers, Comet, Spark, Orbit, Vortex, Datastream |
+| **11 animation styles** | Hyperspace (default), **Signal** (waves), Classic, Aurora, Neon rain, Embers, Comet, Spark, Orbit, Vortex, Datastream |
 | **Style alpha** | Độ sáng particle **theo từng style** (0.15–1.5×), persist riêng |
-| Particle field | Depth layers, trail, token → intensity; soft draw cho Datastream |
+| Reactive field | Start kick · idle shimmer · token heartbeat · multi-session tint · completion bloom |
+| Particle field | Depth layers, trail, token → intensity; soft draw Datastream/Signal |
 | Speed / direction | Settings: tốc độ, hướng (0–360°), spread (ẩn với style radial) |
-| Idle hide | Window ẩn; tray luôn sẵn |
-| Live OpenCode | Event `generation_start` / `tokens_update` / `generation_end` |
+| Idle hide | Window ẩn; tray luôn sẵn · ẩn khi *mọi* OpenCode session xong |
+| Live OpenCode | Events + `bridge_pid` / `session_id` multi-process |
 | HTTP server | `127.0.0.1:9876` — trong process Tauri |
 | Tray | Show settings · Hide · Quit · double-click mở settings |
 | Autostart | Plugin login startup (best-effort) |
@@ -46,7 +47,7 @@ Desktop overlay tối giản cho **Grok / OpenCode**: animation particles khi AI
 
 ### Settings panel
 
-- **Animation style** (10 nút preset)  
+- **Animation style** (11 nút preset)  
 - **Style alpha · {style}** (0.15–1.5×) + Reset  
 - Show token count  
 - Opacity (shell CSS)  
@@ -61,6 +62,7 @@ Desktop overlay tối giản cho **Grok / OpenCode**: animation particles khi AI
 | Style | ID | Ghi chú |
 |-------|-----|---------|
 | Hyperspace | `tunnel` | Default · radial từ tâm · burst start |
+| **Signal** | `signal` | Concentric waves · soft bloom · ambient rings |
 | Classic | `streaks` | Directional streaks |
 | Aurora | `aurora` | Curved soft glow |
 | Neon rain | `rain` | Dense downward |
@@ -71,7 +73,7 @@ Desktop overlay tối giản cho **Grok / OpenCode**: animation particles khi AI
 | Vortex | `vortex` | Spiral out |
 | Datastream | `datastream` | Lane packets · soft bloom (ít lóa) |
 
-Style radial (Hyperspace / Spark / Orbit / Vortex): **ẩn** motion direction/spread.
+Style radial (Hyperspace / **Signal** / Spark / Orbit / Vortex): **ẩn** motion direction/spread.
 
 ---
 
