@@ -98,6 +98,21 @@ def test_abort_ends():
     assert events[-1][1].get("reason") == "abort"
 
 
+def test_tokens_update_includes_session_id():
+    events, det = _collect()
+    det.feed(
+        "INFO service=llm providerID=xai modelID=grok-4.5 "
+        "session.id=ses_aaa small=false stream\n"
+    )
+    det.feed(
+        "INFO tokens.input=10 tokens.output=3 tokens.reasoning=1\n"
+    )
+    tok = [e for e in events if e[0] == "tokens_update"]
+    assert tok
+    assert tok[-1][1].get("session_id") == "ses_aaa"
+    assert tok[-1][1].get("output") == 3
+
+
 if __name__ == "__main__":
     test_stream_start_and_exiting_loop()
     test_skip_small_title_stream()
@@ -105,4 +120,5 @@ if __name__ == "__main__":
     test_other_session_end_ignored()
     test_session_idle_ends()
     test_abort_ends()
+    test_tokens_update_includes_session_id()
     print("detect: ok")

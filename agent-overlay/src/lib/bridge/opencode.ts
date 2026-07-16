@@ -80,13 +80,40 @@ function cancelHideTimer() {
   }
 }
 
-/** Show ambient overlay without stealing IDE focus. */
+function isWindowsHost(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const plat = (navigator as Navigator & { userAgentData?: { platform?: string } })
+    .userAgentData?.platform;
+  return /Win/i.test(plat || "") || /Windows/i.test(ua);
+}
+
+/** Show ambient overlay without stealing IDE focus (Mac-safe). */
 export async function showOverlayWindow(opts?: { focus?: boolean }): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
     const win = getCurrentWindow();
+    // Windows: transparent windows that start hidden may stay minimized/occluded
+    // after a bare show(). Harden visibility without focusing (Mac unchanged).
+    if (isWindowsHost()) {
+      try {
+        if (await win.isMinimized()) {
+          await win.unminimize();
+        }
+      } catch {
+        /* ignore */
+      }
+    }
     await win.show();
     await win.setAlwaysOnTop(true);
+    if (isWindowsHost()) {
+      // Second pass helps WebView2 composite layered windows after hide→show
+      try {
+        await win.setAlwaysOnTop(true);
+      } catch {
+        /* ignore */
+      }
+    }
     // Focus only for explicit UI (settings/tray) — never on generation_start
     if (opts?.focus) {
       await win.setFocus();

@@ -134,7 +134,10 @@ class GenerationDetector:
                     self.current_tokens[key] = new_val
                     updated = True
             if updated and self.is_generating:
-                self.on_event("tokens_update", self.current_tokens.copy())
+                payload = self.current_tokens.copy()
+                if self.current_session_id:
+                    payload["session_id"] = self.current_session_id
+                self.on_event("tokens_update", payload)
 
         if not self.is_generating:
             return

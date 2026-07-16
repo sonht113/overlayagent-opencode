@@ -230,7 +230,11 @@ def run_opencode_with_monitor(extra_args: list[str] | None = None) -> int:
             send_event(event_type, payload)
             return
         if event_type == "tokens_update":
-            send_event(event_type, with_bridge_meta(data))
+            payload = dict(data or {})
+            # Ensure session_id for overlay multi-session matching (detect may omit)
+            if not payload.get("session_id") and detector.current_session_id:
+                payload["session_id"] = detector.current_session_id
+            send_event(event_type, with_bridge_meta(payload))
             return
         send_event(event_type, with_bridge_meta(data))
 
