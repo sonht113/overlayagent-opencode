@@ -104,12 +104,12 @@ export const WARP = {
   /** Spark: max origin seeds per frame burst */
   sparkSeedCount: 3,
 
-  /** Datastream: parallel packet lanes */
-  streamLaneCount: 4,
+  /** Datastream: parallel packet lanes (wider band) */
+  streamLaneCount: 6,
   /** Gap between lanes as fraction of min(w,h) */
-  streamLaneGap: 0.07,
+  streamLaneGap: 0.12,
   /** Soft spring keeping packets on their lane */
-  streamLaneSpring: 9,
+  streamLaneSpring: 7,
 
   /** Token flow chips: max spawns per second */
   tokenChipMaxPerSec: 8,

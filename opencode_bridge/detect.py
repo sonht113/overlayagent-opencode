@@ -110,7 +110,8 @@ class GenerationDetector:
             if self.is_generating:
                 if sid and self.current_session_id and sid == self.current_session_id:
                     return
-                self._emit_end(sid or self.current_session_id, reason="superseded")
+                # End the *old* session — never pass the new sid (frontend map)
+                self._emit_end(self.current_session_id, reason="superseded")
             self.is_generating = True
             self.current_session_id = sid
             self.current_tokens = {"input": 0, "output": 0, "reasoning": 0}
@@ -134,10 +135,7 @@ class GenerationDetector:
                     self.current_tokens[key] = new_val
                     updated = True
             if updated and self.is_generating:
-                payload = self.current_tokens.copy()
-                if self.current_session_id:
-                    payload["session_id"] = self.current_session_id
-                self.on_event("tokens_update", payload)
+                self.on_event("tokens_update", self.current_tokens.copy())
 
         if not self.is_generating:
             return

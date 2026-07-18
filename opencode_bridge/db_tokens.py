@@ -10,10 +10,12 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 from .config import opencode_data_dir
 
@@ -25,37 +27,43 @@ def default_db_path() -> Path:
     return opencode_data_dir() / "opencode.db"
 
 
-_conn_lock = threading.Lock()
-_ro_conn: sqlite3.Connection | None = None
-_ro_path: str | None = None
+def _verbose() -> bool:
+    return os.environ.get("AGENT_BRIDGE_VERBOSE", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
-def _get_ro_connection(db: Path) -> sqlite3.Connection | None:
-    """Reuse a single read-only connection per process when path is stable."""
-    global _ro_conn, _ro_path
+@contextmanager
+def _ro_connection(db: Path) -> Iterator[sqlite3.Connection | None]:
+    """Short-lived read-only connection (safe across threads).
+
+    A process-global shared connection is unsafe: SessionTokenPoller runs on a
+    background thread while start()/stop() run on the detect thread, and
+    sqlite3 defaults to check_same_thread=True.
+    """
     if not db.exists():
-        return None
-    key = str(db)
-    with _conn_lock:
-        if _ro_conn is not None and _ro_path == key:
-            return _ro_conn
-        if _ro_conn is not None:
+        yield None
+        return
+    con: sqlite3.Connection | None = None
+    try:
+        con = sqlite3.connect(
+            f"file:{db.as_posix()}?mode=ro",
+            uri=True,
+            timeout=1.0,
+        )
+        con.execute("PRAGMA query_only=ON")
+        yield con
+    except Exception:
+        yield None
+    finally:
+        if con is not None:
             try:
-                _ro_conn.close()
+                con.close()
             except Exception:
                 pass
-            _ro_conn = None
-            _ro_path = None
-        try:
-            con = sqlite3.connect(
-                f"file:{db.as_posix()}?mode=ro", uri=True, timeout=1.0
-            )
-            con.execute("PRAGMA query_only=ON")
-            _ro_conn = con
-            _ro_path = key
-            return con
-        except Exception:
-            return None
 
 
 @dataclass
@@ -91,11 +99,6 @@ class TokenSnap:
         )
 
 
-def _connect(db: Path) -> sqlite3.Connection | None:
-    """Prefer shared RO connection; callers must not close it."""
-    return _get_ro_connection(db)
-
-
 def _session_totals_on(con: sqlite3.Connection, session_id: str) -> TokenSnap | None:
     try:
         row = con.execute(
@@ -124,10 +127,10 @@ def read_session_totals(session_id: str | None, db: Path | None = None) -> Token
     if not session_id:
         return None
     path = db or default_db_path()
-    con = _connect(path)
-    if not con:
-        return None
-    return _session_totals_on(con, session_id)
+    with _ro_connection(path) as con:
+        if not con:
+            return None
+        return _session_totals_on(con, session_id)
 
 
 def _part_stream_chars(con: sqlite3.Connection, message_id: str) -> tuple[int, int]:
@@ -170,88 +173,91 @@ def read_live_tokens(
     if not session_id:
         return None
     path = db or default_db_path()
-    con = _connect(path)
-    if not con:
-        return None
-
-    try:
-        msg = con.execute(
-            """
-            SELECT id, data FROM message
-            WHERE session_id = ? AND data LIKE '%"role":"assistant"%'
-            ORDER BY time_updated DESC LIMIT 1
-            """,
-            (session_id,),
-        ).fetchone()
-
-        msg_snap = TokenSnap(source="message")
-        text_c = reason_c = 0
-        if msg:
-            mid, data = msg
-            try:
-                obj = json.loads(data)
-                tok = obj.get("tokens") or {}
-                cache = tok.get("cache") or {}
-                msg_snap = TokenSnap(
-                    input=int(tok.get("input") or 0),
-                    output=int(tok.get("output") or 0),
-                    reasoning=int(tok.get("reasoning") or 0),
-                    cache_read=int(cache.get("read") or tok.get("cache_read") or 0),
-                    cache_write=int(cache.get("write") or tok.get("cache_write") or 0),
-                    source="message",
-                )
-            except Exception:
-                pass
-            text_c, reason_c = _part_stream_chars(con, mid)
-
-        # ~4 chars/token rough estimate for mid-stream growth
-        est_out = max(0, text_c // 4)
-        est_reason = max(0, reason_c // 4)
-
-        session = _session_totals_on(con, session_id)
-        delta = TokenSnap(source="session_delta")
-        if session and baseline:
-            delta = TokenSnap(
-                input=max(0, session.input - baseline.input),
-                output=max(0, session.output - baseline.output),
-                reasoning=max(0, session.reasoning - baseline.reasoning),
-                cache_read=max(0, session.cache_read - baseline.cache_read),
-                cache_write=max(0, session.cache_write - baseline.cache_write),
-                source="session_delta",
-            )
-
-        # Merge: prefer real message tokens, grow with stream estimate, floor with session delta
-        out = max(msg_snap.output, est_out, delta.output)
-        reasoning = max(msg_snap.reasoning, est_reason, delta.reasoning)
-        inp = max(msg_snap.input, delta.input)
-
-        if out == 0 and reasoning == 0 and inp == 0:
-            if text_c or reason_c:
-                return TokenSnap(
-                    output=max(1, est_out),
-                    reasoning=est_reason,
-                    source="stream_est",
-                )
+    with _ro_connection(path) as con:
+        if not con:
             return None
 
-        source = "hybrid"
-        if msg_snap.output or msg_snap.reasoning:
-            source = "message+stream" if (est_out or est_reason) else "message"
-        elif est_out or est_reason:
-            source = "stream_est"
-        elif delta.intensity_total() > 0:
-            source = "session_delta"
+        try:
+            msg = con.execute(
+                """
+                SELECT id, data FROM message
+                WHERE session_id = ? AND data LIKE '%"role":"assistant"%'
+                ORDER BY time_updated DESC LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
 
-        return TokenSnap(
-            input=inp,
-            output=out,
-            reasoning=reasoning,
-            cache_read=max(msg_snap.cache_read, delta.cache_read),
-            cache_write=max(msg_snap.cache_write, delta.cache_write),
-            source=source,
-        )
-    except Exception:
-        return None
+            msg_snap = TokenSnap(source="message")
+            text_c = reason_c = 0
+            if msg:
+                mid, data = msg
+                try:
+                    obj = json.loads(data)
+                    tok = obj.get("tokens") or {}
+                    cache = tok.get("cache") or {}
+                    msg_snap = TokenSnap(
+                        input=int(tok.get("input") or 0),
+                        output=int(tok.get("output") or 0),
+                        reasoning=int(tok.get("reasoning") or 0),
+                        cache_read=int(cache.get("read") or tok.get("cache_read") or 0),
+                        cache_write=int(
+                            cache.get("write") or tok.get("cache_write") or 0
+                        ),
+                        source="message",
+                    )
+                except Exception:
+                    pass
+                text_c, reason_c = _part_stream_chars(con, mid)
+
+            # ~4 chars/token rough estimate for mid-stream growth
+            est_out = max(0, text_c // 4)
+            est_reason = max(0, reason_c // 4)
+
+            session = _session_totals_on(con, session_id)
+            delta = TokenSnap(source="session_delta")
+            if session and baseline:
+                delta = TokenSnap(
+                    input=max(0, session.input - baseline.input),
+                    output=max(0, session.output - baseline.output),
+                    reasoning=max(0, session.reasoning - baseline.reasoning),
+                    cache_read=max(0, session.cache_read - baseline.cache_read),
+                    cache_write=max(0, session.cache_write - baseline.cache_write),
+                    source="session_delta",
+                )
+
+            # Merge: prefer real message tokens, grow with stream estimate,
+            # floor with session delta
+            out = max(msg_snap.output, est_out, delta.output)
+            reasoning = max(msg_snap.reasoning, est_reason, delta.reasoning)
+            inp = max(msg_snap.input, delta.input)
+
+            if out == 0 and reasoning == 0 and inp == 0:
+                if text_c or reason_c:
+                    return TokenSnap(
+                        output=max(1, est_out),
+                        reasoning=est_reason,
+                        source="stream_est",
+                    )
+                return None
+
+            source = "hybrid"
+            if msg_snap.output or msg_snap.reasoning:
+                source = "message+stream" if (est_out or est_reason) else "message"
+            elif est_out or est_reason:
+                source = "stream_est"
+            elif delta.intensity_total() > 0:
+                source = "session_delta"
+
+            return TokenSnap(
+                input=inp,
+                output=out,
+                reasoning=reasoning,
+                cache_read=max(msg_snap.cache_read, delta.cache_read),
+                cache_write=max(msg_snap.cache_write, delta.cache_write),
+                source=source,
+            )
+        except Exception:
+            return None
 
 
 class SessionTokenPoller:
@@ -272,9 +278,14 @@ class SessionTokenPoller:
         self._thread: threading.Thread | None = None
         self._baseline: TokenSnap | None = None
         self._last_key: tuple | None = None
+        self._error_logged = False
 
     def start(self) -> None:
-        self._baseline = read_session_totals(self.session_id, self.db)
+        # Baseline is captured on the poller thread so all DB work stays
+        # thread-local (avoids sqlite check_same_thread races).
+        self._baseline = None
+        self._last_key = None
+        self._error_logged = False
         self._stop.clear()
         self._thread = threading.Thread(
             target=self._loop, name="oc-token-poll", daemon=True
@@ -291,7 +302,28 @@ class SessionTokenPoller:
     def snapshot(self) -> TokenSnap | None:
         return read_live_tokens(self.session_id, self._baseline, self.db)
 
+    def _log_error_once(self, exc: BaseException) -> None:
+        if self._error_logged:
+            return
+        self._error_logged = True
+        msg = f"[oc-token-poll] session={self.session_id} error: {exc}"
+        if _verbose():
+            print(msg, file=sys.stderr, flush=True)
+        else:
+            # One-shot breadcrumb even when quiet (TUI-safe: stderr only)
+            try:
+                print(msg, file=sys.stderr, flush=True)
+            except Exception:
+                pass
+
     def _loop(self) -> None:
+        # Capture baseline on this thread before the first sample
+        try:
+            self._baseline = read_session_totals(self.session_id, self.db)
+        except Exception as e:
+            self._log_error_once(e)
+            self._baseline = None
+
         # Immediate first sample after a short delay (message row appears)
         self._stop.wait(0.15)
         while not self._stop.is_set():
@@ -300,6 +332,6 @@ class SessionTokenPoller:
                 if snap and snap.key() != self._last_key:
                     self._last_key = snap.key()
                     self.on_tokens(snap.as_dict())
-            except Exception:
-                pass
+            except Exception as e:
+                self._log_error_once(e)
             self._stop.wait(self.interval)

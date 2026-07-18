@@ -843,7 +843,7 @@ export class ParticleSystem {
     p.size = baseSize;
     p.alpha =
       (this.style.softBloom
-        ? 0.38 + Math.random() * 0.22
+        ? 0.52 + Math.random() * 0.28
         : 0.7 + Math.random() * 0.35) * L.alphaMul;
     p.layer = layer;
     p.hue = palette.h + (Math.random() - 0.5) * 16;
@@ -1361,9 +1361,9 @@ export class ParticleSystem {
 
     const soft = !!this.style.softBloom;
     const drawMul = (this.style.glowDrawMul ?? 1) * this.userStyleAlpha;
-    // Soft styles: cap intensity-driven glow so packets don't bloom white
+    // Soft styles: gentler glow curve (still softer than full warp bloom)
     const effectiveGlow = soft
-      ? lerp(0.55, 0.85, clamp(this.intensity, 0, 1))
+      ? lerp(0.72, 1.05, clamp(this.intensity, 0, 1))
       : glowScale;
 
     const lifeT = Math.max(0, p.life / p.maxLife);
@@ -1373,8 +1373,8 @@ export class ParticleSystem {
 
     const stretch = clamp(
       speed * WARP.stretchPerSpeed * stretchScale,
-      soft ? Math.min(WARP.minStretch, 8) : WARP.minStretch,
-      soft ? Math.min(WARP.maxStretch, 72) : WARP.maxStretch,
+      soft ? Math.min(WARP.minStretch, 10) : WARP.minStretch,
+      soft ? Math.min(WARP.maxStretch, 96) : WARP.maxStretch,
     );
 
     const ux = p.vx / speed;
@@ -1385,7 +1385,7 @@ export class ParticleSystem {
     const tailY = p.y - uy * stretch;
 
     const color = hslToRgb(p.hue, p.sat, p.light);
-    const size = soft ? p.size * 0.75 : p.size;
+    const size = soft ? p.size * 0.92 : p.size;
 
     if (p.hasTrail && p.trailCount > 1) {
       this.drawTrailGhosts(

@@ -380,13 +380,23 @@ export function trackOpencodeEnd(
   },
   finalTokens?: number,
 ): boolean {
-  let key = resolveActiveSessionKey(meta);
-  // Sole active session + unscoped end (missing session_id) → end that session.
-  // Never guess when ≥2 sessions (multi-process Mac/Windows safe).
-  if (!key && activeSessionCount() === 1) {
-    key = Object.keys(generation.activeSessions)[0] ?? null;
-  }
+  const key = resolveActiveSessionKey(meta);
+  // Apply final tokens to the session *before* removing it so the UI can
+  // still see a rising tokenCount while isGenerating is true for one tick
+  // (chips / intensity). Then drop the session and sync flags.
   if (key && generation.activeSessions[key]) {
+    const cur = generation.activeSessions[key];
+    const n =
+      finalTokens != null && finalTokens > 0
+        ? Math.max(0, Math.floor(finalTokens))
+        : cur.tokens;
+    if (n > 0 && cur.tokens !== n) {
+      generation.activeSessions = {
+        ...generation.activeSessions,
+        [key]: { ...cur, tokens: n, lastSeenAt: Date.now() },
+      };
+      syncLiveFlagsFromSessions();
+    }
     const next = { ...generation.activeSessions };
     delete next[key];
     generation.activeSessions = next;
@@ -408,17 +418,9 @@ export function updateOpencodeTokens(
   tokens: number,
 ) {
   const n = Math.max(0, Math.floor(Number.isFinite(tokens) ? tokens : 0));
-  let key = resolveActiveSessionKey(meta);
-  // Orphan token ticks often omit session_id (stream_est). If exactly one
-  // OpenCode session is live, attach there — never when ≥2 (multi-process safe).
-  if (!key && activeSessionCount() === 1) {
-    key = Object.keys(generation.activeSessions)[0] ?? null;
-  }
-  if (!key) {
-    key = sessionKeyFromEvent(meta);
-  }
-  const cur = key ? generation.activeSessions[key] : undefined;
-  if (cur && key) {
+  const key = resolveActiveSessionKey(meta) || sessionKeyFromEvent(meta);
+  const cur = generation.activeSessions[key];
+  if (cur) {
     if (cur.tokens === n) {
       // Still refresh liveness without cloning the map when tokens unchanged
       cur.lastSeenAt = Date.now();
