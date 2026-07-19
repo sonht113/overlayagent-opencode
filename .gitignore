@@ -24,6 +24,7 @@ Thumbs.db
 Desktop.ini
 .idea/
 .vscode/
+.grok/
 *.swp
 *.log
 

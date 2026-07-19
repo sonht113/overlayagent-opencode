@@ -1,5 +1,5 @@
-# =============================================================================
-# Agent Overlay + OpenCode helpers — paste into PowerShell profile:
+﻿# =============================================================================
+# Agent Overlay + OpenCode helpers - paste into PowerShell profile:
 #   notepad $PROFILE
 #   . C:\Work\Tool\profile-snippet.ps1
 # =============================================================================
