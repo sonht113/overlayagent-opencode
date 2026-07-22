@@ -6,4 +6,5 @@ if not defined AGENT_TOOL_ROOT (
   for %%I in ("%~dp0..") do set "AGENT_TOOL_ROOT=%%~fI"
 )
 set "AGENT_OPENCODE_SHIM_DIR=%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0opencode.ps1" %*
+REM --%% becomes --% for PowerShell (stops -v being rewritten as -Verbose).
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0opencode.ps1" --%% %*

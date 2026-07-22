@@ -2,12 +2,14 @@
 <#
   PATH shim for `opencode`.
   Resolves the real OpenCode binary (not this shim), then runs monitor wrapper.
+  Meta flags (-v/--version/-h/--help) go straight to the real binary.
 #>
 
-param(
-  [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$Args
-)
+# Use $args (not param()) so PowerShell never steals -v as -Verbose.
+$OpenCodeArgs = @($args)
+if ($OpenCodeArgs.Count -gt 0 -and $OpenCodeArgs[0] -eq "--") {
+  $OpenCodeArgs = @($OpenCodeArgs | Select-Object -Skip 1)
+}
 
 $ErrorActionPreference = "Stop"
 $ShimDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -77,6 +79,19 @@ if (-not $Real) {
 $env:OPENCODE_CMD = $Real
 $env:OPENCODE_REAL = $Real
 
+# Meta flags: skip overlay/monitor, call real OpenCode directly.
+$metaFlags = @("-v", "--version", "-h", "--help")
+if ($OpenCodeArgs.Count -ge 1) {
+  $allMeta = $true
+  foreach ($a in $OpenCodeArgs) {
+    if ($metaFlags -notcontains $a) { $allMeta = $false; break }
+  }
+  if ($allMeta -and ($metaFlags -contains $OpenCodeArgs[0])) {
+    & $Real @OpenCodeArgs
+    exit $LASTEXITCODE
+  }
+}
+
 # Ensure config has the path
 $bridgeDir = Join-Path $ToolRoot ".agent-bridge"
 New-Item -ItemType Directory -Force -Path $bridgeDir | Out-Null
@@ -113,10 +128,10 @@ $monitor = Join-Path $ToolRoot "opencode_monitor.py"
 # Keep caller's cwd so OpenCode opens the project the user is in.
 $env:PYTHONPATH = if ($env:PYTHONPATH) { "$ToolRoot$([IO.Path]::PathSeparator)$env:PYTHONPATH" } else { $ToolRoot }
 if (Test-Path (Join-Path $ToolRoot "opencode_bridge")) {
-  if ($usePy) { & py -3 -m opencode_bridge run @Args }
-  else { & $py -m opencode_bridge run @Args }
+  if ($usePy) { & py -3 -m opencode_bridge run @OpenCodeArgs }
+  else { & $py -m opencode_bridge run @OpenCodeArgs }
   exit $LASTEXITCODE
 }
-if ($usePy) { & py -3 $monitor @Args }
-else { & $py $monitor @Args }
+if ($usePy) { & py -3 $monitor @OpenCodeArgs }
+else { & $py $monitor @OpenCodeArgs }
 exit $LASTEXITCODE

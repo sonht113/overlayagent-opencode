@@ -102,19 +102,37 @@ def run_daemon(interval: float = 5.0) -> None:
             pass
 
 
+_BRIDGE_CMDS = frozenset({"daemon", "enable", "disable", "status", "run"})
+_BRIDGE_HELP = frozenset({"-h", "--help"})
+
+
 def main(argv: list[str] | None = None) -> int:
+    raw = list(argv if argv is not None else sys.argv[1:])
+
+    from .runner import run_opencode_with_monitor
+
+    # Default / unknown first token → OpenCode args (flags included).
+    if not raw or (raw[0] not in _BRIDGE_CMDS and raw[0] not in _BRIDGE_HELP):
+        return run_opencode_with_monitor(raw)
+
+    # `run` must not go through argparse — flags like --version would be rejected.
+    if raw[0] == "run":
+        extra = raw[1:]
+        if extra and extra[0] == "--":
+            extra = extra[1:]
+        return run_opencode_with_monitor(extra)
+
     p = argparse.ArgumentParser(prog="opencode_bridge")
-    sub = p.add_subparsers(dest="cmd")
+    sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("daemon", help="Keep overlay alive + status file")
     sub.add_parser("enable", help="Enable event monitoring")
     sub.add_parser("disable", help="Disable event monitoring (kill switch)")
     sub.add_parser("status", help="Print status JSON")
-    run_p = sub.add_parser("run", help="Run OpenCode with monitor (same as oc)")
-    run_p.add_argument("args", nargs="*")
+    sub.add_parser("run", help="Run OpenCode with monitor (same as oc)")
 
-    args = p.parse_args(argv)
-    cmd = args.cmd or "run"
+    args = p.parse_args(raw)
+    cmd = args.cmd
 
     if cmd == "daemon":
         run_daemon()
@@ -138,12 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         print("recent:", read_recent_events(5))
         return 0
 
-    from .runner import run_opencode_with_monitor
-
-    extra = args.args if cmd == "run" and hasattr(args, "args") else (argv or [])
-    if cmd == "run":
-        return run_opencode_with_monitor(extra)
-    return run_opencode_with_monitor(list(argv or []))
+    return run_opencode_with_monitor([])
 
 
 if __name__ == "__main__":
